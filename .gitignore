@@ -1,0 +1,10 @@
+
+
+*.pyc
+*.jar
+*.pbf
+*.zip
+
+src.egg-info/*
+*.egg-info/*
+__pycache__/
