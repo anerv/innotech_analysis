@@ -8,3 +8,5 @@
 src.egg-info/*
 *.egg-info/*
 __pycache__/
+
+data/input/*

@@ -15,3 +15,13 @@ conda activate innotech
 pip install matplotlib-scalebar
 pip install --use-pep517 -e .
 ````
+
+
+```bash
+python setup_folders.py
+```
+
+````bash
+chmod +x copy_input_data.sh
+bash copy_input_data.sh /mnt/c/Users/anerv/repositories/innotech
+````

@@ -1,0 +1,216 @@
+# This is a configuration file for the service location model.
+
+# All data referenced under INPUT DATA must be downloaded and placed in the data directory. Update paths and file names as needed.
+
+crs : "EPSG:25832" # The coordinate reference system used for the data, must be the same as the data files
+
+#### FILEPATHS #####
+# The filepaths are relative to the main directory for the repository and should point to the data files
+
+# INPUT DATA
+
+# administrative boundaries
+study_area_config:
+  regions: # if model is only to be run for a single municipality, provide the filepath to the municipal boundaries here, change study_area_name to the kommunekode or name and the id_column to kommunekode or navn
+    inputpath: "../data/input/DAGI10MULTIGEOM_GPKG_HF_20250504080002/regionsinddeling.gpkg"
+    outputpath: "../data/processed/adm_boundaries/study_area.gpkg"
+    study_area_name: "Region Sjælland"
+    id_column: "navn"
+  municipalities:
+    inputpath: "../data/input/DAGI10MULTIGEOM_GPKG_HF_20250504080002/kommuneinddeling.gpkg" 
+    outputpath: "../data/processed/adm_boundaries/municipalities.parquet"
+    id_column: "kommunekode" # The ID column used to identify the municipality in the data
+
+
+# CVR data
+cvr_address_input_fp: "../data/input/cvr/CVR_V1_Adressering_TotalDownload_csv_Current_8.csv"
+cvr_brancher_input_fp: "../data/input/cvr/CVR_V1_Branche_TotalDownload_csv_Current_8.csv"
+cvr_penhed_input_fp: "../data/input/cvr/CVR_V1_Produktionsenhed_TotalDownload_csv_Current_8.csv"
+
+# DAR data
+input_address_fp: "../data/input/adresser/DAR_V1_Adresse_TotalDownload_csv_Current_256.csv" 
+address_points_fp:  "../data/input/adresser/DAR_V1_Adressepunkt_TotalDownload_csv_Current_256.csv" 
+housenumbers_fp:  "../data/input/adresser/DAR_V1_Husnummer_TotalDownload_csv_Current_256.csv" 
+
+# BBR data
+bbr_fp:  "../data/input/bbr/BBR_V1_Enhed_TotalDownload_csv_Current_263.csv"
+
+# OSM Road network
+osm_input_pbf: "input/osm/denmark-latest.osm.pbf" # this filepath is relative to the data directory
+
+
+# PROCESSED DATA
+addresses_fp_all: "../data/processed/adresser/addresses-full.parquet"
+
+address_bbr_fp: "../data/processed/bbr/adgangsadresser_beboelse.parquet"
+
+destinations_combined_agg_fp: "../data/processed/destinations/osm-cvr-combined-aggregated.parquet"
+destinations_combined_fp: "../data/processed/destinations/osm-cvr-combined.parquet"
+
+osm_destinations_fp: "../data/processed/osm/all_osm_services.gpkg"
+cvr_destinations_fp:  "../data/processed/cvr/cvr-services-w-address.gpkg"
+cvr_destinations_all_fp:  "../data/processed/cvr/cvr-services-all.gpkg"
+
+# The service array is used to define the services that are available in the model and how they are processed.
+#    - service_type: doctor-gp Used to name the service
+#      spatial_restriction_type: Used to define the type of spatial restriction on the service emmpty or null means no restriction
+#      n_neighbors: 1  The number of neighbors to consider when calculating the service location
+#      arival_time: "11:00" The time of arrival at the service location
+#      nace_codes: The NACE codes used to identify the service location in the CVR data
+#       - 862100
+#      osm_tags: The OSM tags used to identify the service location in the OSM data
+services:
+    - service_type: doctor
+      spatial_restriction_type: 
+      n_neighbors: 1
+      arival_time: "11:00"
+      nace_codes:
+        - 862100
+      osm_tags:
+        - amenity: doctors
+        - amenity: general_practitioner
+        - amenity: clinic
+        - healthcare: doctor
+
+    - service_type: dentist
+      spatial_restriction_type: 
+      n_neighbors: 1
+      arival_time: "11:00"
+      nace_codes:
+        - 862300
+      osm_tags:
+        - amenity: dentist
+        - healthcare: dentist
+
+    - service_type: pharmacy
+      n_neighbors: 1
+      arival_time: "15:00"
+      spatial_restriction_type: 
+      nace_codes:
+        - 477300
+      osm_tags:
+        - amenity: pharmacy
+
+    - service_type: kindergarten-nursery
+      n_neighbors: 1
+      arival_time: "7:45"
+      spatial_restriction_type: "municipality"
+      nace_codes:
+        - 889130
+        - 889120
+      osm_tags:
+        - amenity: kindergarten
+        - amenity: nursery
+        - amenity: childcare
+
+    - service_type: school
+      n_neighbors: 1
+      arival_time: "7:45"
+      spatial_restriction_type: "municipality"
+      nace_codes:
+        - 852010
+      #osm_tags:
+        # - amenity: school
+
+    - service_type: supermarket
+      n_neighbors: 1
+      arival_time: "17:00"
+      spatial_restriction_type:
+      nace_codes:
+        - 471120 # Supermarked
+        - 471130 # Discount supermarket
+      osm_tags:
+        - shop: supermarket
+        - shop: grocery
+        - amenity: convenience
+
+    - service_type: library 
+      spatial_restriction_type: 
+      n_neighbors: 1
+      arival_time: "16:00"
+      nace_codes:
+        - 911100
+      osm_tags:
+        - amenity: library
+
+    - service_type: train_station
+      spatial_restriction_type: 
+      n_neighbors: 1
+      arival_time: "7:30"
+      nace_codes:
+        - 49
+      osm_tags:
+        - railway: station
+
+    - service_type: sports_facility
+      spatial_restriction_type:
+      n_neighbors: 1
+      arival_time: "19:00"
+      nace_codes:
+        - 93
+      osm_tags:
+        - amenity: sports_centre
+        - leisure: sports_centre
+        - club: sport
+
+# The restriction array is used to define the spatial restrictions that are applied to the services.
+# Each restriction has a name, a file path, and an ID that is used to identify the restriction in the data.
+# The file path is the location of the data file that contains the spatial restriction information.
+# The file_path is relative to the data directory and should point to a parquet file
+# Note the CRS if the restrion files must be the same as the data files
+# and all files are assumed to be 2D i.e no z coordinate
+# Note that if the adresses or service data has a attribute with the same name as the restriction following 
+# by "_id" ie. municipality_id: this will be used otherwise a spatial join will be preformed.
+# restrictions:
+#    - name: "municipality" The name of the restriction that must match the name in the service array
+#      file_path: "muni2.parquet" The file path to the restriction data relative to the data directory
+#      id_attribute: kommunekode   The ID attribute that is used to identify the restriction.
+
+restrictions:
+    - name: "municipality"
+      file_path: "../data/processed/adm_boundaries/municipalities.parquet" # should be the same as in the sub_study_areas_fp!
+      id_attribute: kommunekode
+
+# The following parameters are used when calling OTP
+sample_size : 0 # Munber of rows to sample from the data, 0 = all
+chunk_size : 5000  # number of rows to load into memory
+parallelism : 10  # The number of parallel processes to use when calling OTP
+
+walk_speed : 1.3 # The walking speed in m/s used when calculating the travel time to the service location
+# A large search window is recommended to ensure that all start points are connected to the service locations
+# A large search window can potentially result in very long travel and wait times
+search_window : 86400 # in seconds # The search window in seconds when calculating the travel time to the service location
+
+# Define the endpoint URL
+otp_url : "http://localhost:8080/otp/gtfs/v1" #
+
+
+otp_results : "otp_results.db" # The persistant duckdb  where the OTP results are stored
+
+# Define date used for OTP query (the time is defined in the service array)
+travel_date : "2025-04-22"
+
+
+# Filepaths for input data when calculating the travel matrix in the nearest.py (to and from)
+data_sources:
+  dwellings:
+    path: "processed/bbr/adgangsadresser_beboelse.parquet" # should be the same as address_bbr_fp defined above but relative to the data directory
+    base_columns:
+      address_id: "adresseIdentificerer"
+      geometry: "geometry"  # EPSG:25832
+      road_point_lat: "vej_pos_lat"
+      road_point_lon: "vej_pos_lon"
+
+  services:
+    path: "processed/destinations/osm-cvr-combined.parquet" # should be the same as destinations_combined_fp defined above but relative to the data directory
+    base_columns:
+      address_id: "Adr_id"
+      geometry: "geometry"
+      road_point_lat: "vej_pos_lat"
+      road_point_lon: "vej_pos_lon"
+      service_type: "nace_code"  # The service type is used to identify the service in the data
+
+
+
+
+

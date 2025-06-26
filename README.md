@@ -1,4 +1,4 @@
-# InnoTech mobilitetsmodel
+# Analyse af resultater fra InnoTech mobilitetsmodel
 
 Dette repository indeholder kode til at analysere outputs fra mobilitetsmodellen udviklet for projekt InnoTech.
 Modellen beregner rejsetid med offentlig transport i kombination med gang til destinationer/services fra alle husstande i en region.
