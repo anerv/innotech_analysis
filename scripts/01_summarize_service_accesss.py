@@ -27,15 +27,20 @@ os.environ["GDAL_DATA"] = os.path.join(
 # Define the path to the config.yml file
 script_path = Path(__file__).resolve()
 root_path = script_path.parent.parent
-data_path = root_path / "data/processed/destinations"
+data_path = root_path / "data/input"
 results_path = root_path / "results"
-config_path = root_path / "config.yml"
+config_analysis_path = root_path / "config_analysis.yml"
+config_model_path = root_path / "config_model.yml"
 
 # Read and parse the YAML file
-with open(config_path, "r") as file:
-    config_model = yaml.safe_load(file)
+with open(config_analysis_path, "r") as file:
+    config_analysis = yaml.safe_load(file)
 
-    crs = config_model["crs"]
+    crs = config_analysis["crs"]
+
+
+with open(config_model_path, "r") as file:
+    config_model = yaml.safe_load(file)
 
 
 # %%
@@ -94,7 +99,7 @@ travel_time_columns = [
 
 
 all_travel_times_gdf = combine_results(
-    config_model["services"],
+    config_analysis["services"],
     results_path,
     travel_time_columns,
     n_neighbors=1,
@@ -108,7 +113,9 @@ all_travel_times_gdf["total_time"] = all_travel_times_gdf[
 
 # compute average travel time per hex bin
 
-study_area = gpd.read_file(config_model["study_area_config"]["regions"]["outputpath"])
+study_area = gpd.read_file(
+    config_analysis["study_area_config"]["regions"]["outputpath"]
+)
 
 hex_grid = create_hex_grid(study_area, 8, crs, 200)
 
@@ -145,10 +152,10 @@ hex_avg_travel_times_gdf.to_parquet(
 # %%
 
 municipalities = gpd.read_parquet(
-    config_model["study_area_config"]["municipalities"]["outputpath"]
+    config_analysis["study_area_config"]["municipalities"]["outputpath"]
 )
 
-id_column = config_model["study_area_config"]["municipalities"]["id_column"]
+id_column = config_analysis["study_area_config"]["municipalities"]["id_column"]
 municipalities = municipalities[["geometry", id_column]]
 
 regional_travel_times = gpd.sjoin(
