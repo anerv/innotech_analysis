@@ -10,3 +10,5 @@ src.egg-info/*
 __pycache__/
 
 data/input/*
+results/*
+data/processed/*
