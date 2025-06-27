@@ -1,3 +1,4 @@
 
-study_area_fp : "data/input/study_area.gpkg" # Path to the study area file, must be a GeoJSON file
+study_area_fp : "../data/input/study_area.gpkg" # Path to the study area file
+municipalities_fp : "../data/input/municipalities.parquet" # Path to the municipalities file
 crs : "EPSG:25832" # The coordinate reference system used for the data, must be the same as the data files
