@@ -91,7 +91,7 @@ services:
       osm_tags:
         - amenity: pharmacy
 
-    - service_type: kindergarten-nursery
+    - service_type: kindergarten_nursery
       n_neighbors: 1
       arival_time: "7:45"
       spatial_restriction_type: "municipality"
