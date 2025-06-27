@@ -14,4 +14,8 @@ cp "${provided_path}/config.yml" "./config_model.yml" || { echo "Failed to copy 
 # Task 2: Copy files ending with '_otp_geo.parquet' to current_directory/data/input
 cp "${provided_path}"/results/data/*_otp_geo.parquet data/input/ || { echo "No files matching '_otp_geo.parquet' found or failed to copy"; exit 1; }
 
+# Task 2: Copy files ending with '_otp_geo.parquet' to current_directory/data/input
+cp "${provided_path}"/data/processed/adm_boundaries/study_area.gpkg data/input/ || { echo "Study area gpkg not found or failed to copy"; exit 1; }
+
+
 echo "Input data copied successfully."
