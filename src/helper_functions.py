@@ -17,7 +17,6 @@ import numpy as np
 import duckdb
 from datetime import datetime
 from zoneinfo import ZoneInfo
-import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import reduce
 
@@ -337,64 +336,64 @@ def compute_weighted_time(
     return all_travel_times_gdf
 
 
-def transfers_from_json(json_str):
-    if pd.isna(json_str) or json_str == "":
-        return pd.NA
-    try:
-        mode_dict = json.loads(json_str)
-        non_walk_modes = [mode for mode in mode_dict.keys() if mode.upper() != "WALK"]
-        n_modes = len(non_walk_modes)
+# def transfers_from_json(json_str):
+#     if pd.isna(json_str) or json_str == "":
+#         return pd.NA
+#     try:
+#         mode_dict = json.loads(json_str)
+#         non_walk_modes = [mode for mode in mode_dict.keys() if mode.upper() != "WALK"]
+#         n_modes = len(non_walk_modes)
 
-        return max(0, n_modes - 1)
-    except Exception:
-        return pd.NA
+#         return max(0, n_modes - 1)
+#     except Exception:
+#         return pd.NA
 
 
-def unpack_modes_from_json(df, json_column="mode_durations_json"):
-    if json_column not in df.columns:
-        raise ValueError(f"Column '{json_column}' does not exist in the DataFrame.")
+# def unpack_modes_from_json(df, json_column="mode_durations_json"):
+#     if json_column not in df.columns:
+#         raise ValueError(f"Column '{json_column}' does not exist in the DataFrame.")
 
-    # Parse JSON strings into dictionaries (handle None or empty strings gracefully)
-    def parse_json(x):
-        if pd.isna(x) or x == "":
-            return {}
-        if isinstance(x, dict):
-            return x
-        try:
-            return json.loads(x)
-        except Exception:
-            return {}
+#     # Parse JSON strings into dictionaries (handle None or empty strings gracefully)
+#     def parse_json(x):
+#         if pd.isna(x) or x == "":
+#             return {}
+#         if isinstance(x, dict):
+#             return x
+#         try:
+#             return json.loads(x)
+#         except Exception:
+#             return {}
 
-    # Apply parsing
-    modes_dicts = df[json_column].apply(parse_json)
+#     # Apply parsing
+#     modes_dicts = df[json_column].apply(parse_json)
 
-    # Get all unique mode keys across all rows
-    all_modes = set()
-    for d in modes_dicts:
-        all_modes.update(d.keys())
+#     # Get all unique mode keys across all rows
+#     all_modes = set()
+#     for d in modes_dicts:
+#         all_modes.update(d.keys())
 
-    all_modes = list(all_modes)
-    all_modes = [mode.lower() for mode in all_modes]  # Normalize to lowercase
-    all_modes = [
-        mode + "_duration" for mode in all_modes
-    ]  # Append '_duration' to each mode
-    all_modes = sorted(all_modes)  # Sort modes for consistent order
+#     all_modes = list(all_modes)
+#     all_modes = [mode.lower() for mode in all_modes]  # Normalize to lowercase
+#     all_modes = [
+#         mode + "_duration" for mode in all_modes
+#     ]  # Append '_duration' to each mode
+#     all_modes = sorted(all_modes)  # Sort modes for consistent order
 
-    # Create a DataFrame with one column per mode, filled with NaN initially
-    modes_df = pd.DataFrame(index=df.index, columns=all_modes)
+#     # Create a DataFrame with one column per mode, filled with NaN initially
+#     modes_df = pd.DataFrame(index=df.index, columns=all_modes)
 
-    # Fill the modes_df with durations from the dicts
-    for mode in all_modes:
-        modes_df[mode] = modes_dicts.apply(lambda d: d.get(mode, None))
+#     # Fill the modes_df with durations from the dicts
+#     for mode in all_modes:
+#         modes_df[mode] = modes_dicts.apply(lambda d: d.get(mode, None))
 
-    modes_df = modes_df.apply(pd.to_numeric, errors="coerce")
+#     modes_df = modes_df.apply(pd.to_numeric, errors="coerce")
 
-    modes_df = modes_df.fillna(0)  # Replace NaN with 0 for easier analysis
+#     modes_df = modes_df.fillna(0)  # Replace NaN with 0 for easier analysis
 
-    # Combine original df with the expanded modes_df
-    df = pd.concat([df, modes_df], axis=1)
+#     # Combine original df with the expanded modes_df
+#     df = pd.concat([df, modes_df], axis=1)
 
-    return df
+#     return df
 
 
 # def get_service_type(nace_code, nace_dict):
