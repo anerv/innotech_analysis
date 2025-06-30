@@ -2,3 +2,15 @@
 study_area_fp : "../data/input/study_area.gpkg" # Path to the study area file
 municipalities_fp : "../data/input/municipalities.parquet" # Path to the municipalities file
 crs : "EPSG:25832" # The coordinate reference system used for the data, must be the same as the data files
+
+
+service_weights:
+  doctor: 0.05
+  dentist: 0.05
+  pharmacy: 0.05
+  kindergarten_nursery: 5
+  school: 5
+  supermarket: 5
+  library: 1
+  train_station: 5
+  sports_facility: 1
