@@ -19,6 +19,131 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import reduce
+from shapely import wkb
+
+
+# ########################### DUCKDB FUNCTIONS ###########################
+
+
+def safe_wkb_load(val):
+
+    if isinstance(val, (bytes, memoryview, bytearray)):
+        return wkb.loads(bytes(val))  # Convert to raw bytes
+    return None
+
+
+def load_gdf_from_duckdb(
+    con: duckdb.DuckDBPyConnection, table_name: str, crs: str, limit: int
+) -> gpd.GeoDataFrame:
+    """
+    Load a GeoDataFrame from a DuckDB table with spatial support.
+    Converts WKB to Shapely geometries.
+    """
+    query = f'SELECT *, ST_AsWKB(geometry) AS geom_wkb FROM "{table_name}"'
+    if limit:
+        query += f" LIMIT {limit}"
+    df = con.execute(query).fetchdf()
+
+    df["geometry"] = df["geom_wkb"].apply(safe_wkb_load)
+
+    # Drop the WKB helper column
+    df = df.drop(columns=["geom_wkb"])
+
+    # Create GeoDataFrame
+    gdf = gpd.GeoDataFrame(df, geometry="geometry", crs=crs)
+
+    return gdf
+
+
+def export_gdf_to_duckdb_spatial(
+    gdf: gpd.GeoDataFrame, con: duckdb.DuckDBPyConnection, table_name: str
+):
+    """
+    Export a GeoDataFrame to DuckDB using the spatial extension.
+    Converts geometry to WKB and avoids GeoPandas warnings.
+    """
+
+    if gdf.empty:
+        raise ValueError("GeoDataFrame is empty.")
+
+    # Load DuckDB spatial extension
+    con.execute("INSTALL spatial;")
+    con.execute("LOAD spatial;")
+
+    # Convert geometry to WKB BEFORE assigning back to a DataFrame
+    geometry_wkb = gdf.geometry.apply(lambda geom: geom.wkb if geom else None)
+    df = gdf.drop(
+        columns=gdf.geometry.name
+    ).copy()  # drop geometry column before assignment
+    df["geometry"] = geometry_wkb  # now assign WKB as raw bytes
+
+    # Register with DuckDB and create spatial table
+    con.register("temp_gdf", df)
+
+    column_names = [f'"{col}"' for col in df.columns if col != "geometry"]
+    select_clause = ", ".join(column_names + ["ST_GeomFromWKB(geometry) AS geometry"])
+
+    con.execute(
+        f'CREATE OR REPLACE TABLE "{table_name}" AS SELECT {select_clause} FROM temp_gdf;'
+    )
+    con.unregister("temp_gdf")
+
+    print(f"GeoDataFrame with {len(df)} rows exported to DuckDB table '{table_name}'.")
+
+
+def combine_columns_from_tables(
+    column_names: list[str],
+    conn: duckdb.DuckDBPyConnection,
+    table_names: list[str],
+    common_id_column: str,
+    geometry_column: str = "geometry",
+    crs: str = "EPSG:25832",
+):
+    """
+    Combines specified columns from multiple tables into a single query result,
+    including the geometry column from the first table, properly converted to shapely geometries.
+
+    Parameters:
+    - column_names (list of str): The names of the columns to combine from each table.
+    - geometry_column (str): The name of the geometry column to include.
+    - conn: DuckDB connection object.
+    - table_names (list of str): List of table names to join.
+    - common_id_column (str): The common ID column to join tables on.
+    - crs (optional): CRS to assign to the output GeoDataFrame.
+    """
+
+    # Start building the SQL query
+    select_clause = f"t1.{common_id_column}, ST_AsWKB(t1.{geometry_column}) AS geom_wkb"
+    join_clause = ""
+
+    # Add each table's columns to SELECT and JOIN clauses
+    for i, table in enumerate(table_names):
+        alias = f"t{i+1}"
+        for column_name in column_names:  # Iterate over each column name
+            select_clause += f", {alias}.{column_name} AS {column_name}_{table}"
+        if i > 0:
+            join_clause += f' LEFT JOIN "{table}" {alias} ON t1.{common_id_column} = {alias}.{common_id_column}'
+
+    # Construct the full query
+    query = f"""
+    SELECT {select_clause}
+    FROM \"{table_names[0]}\" t1
+    {join_clause}
+    """
+
+    try:
+        df = conn.execute(query).fetchdf()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+
+    df[geometry_column] = df["geom_wkb"].apply(safe_wkb_load)
+    df = df.drop(columns=["geom_wkb"])
+
+    gdf = gpd.GeoDataFrame(df, geometry=geometry_column, crs=crs)
+
+    return gdf
+
 
 # ######################## OTP FUNCTIONS ########################
 
