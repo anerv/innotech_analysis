@@ -9,13 +9,15 @@ from pathlib import Path
 import os
 import sys
 import duckdb
-from shapely import wkb
 
 from src.helper_functions import (
     highlight_max_traveltime,
     highlight_min_traveltime,
     create_hex_grid,
     compute_weighted_time,
+    export_gdf_to_duckdb_spatial,
+    combine_columns_from_tables,
+    export_gdf_to_duckdb_spatial,
 )
 
 
@@ -39,6 +41,8 @@ with open(config_analysis_path, "r") as file:
 
     crs = config_analysis["crs"]
 
+    service_weights = config_analysis["service_weights"]
+
 
 with open(config_model_path, "r") as file:
     config_model = yaml.safe_load(file)
@@ -47,9 +51,16 @@ with open(config_model_path, "r") as file:
 walkspeed_min = config_model["walk_speed"] * 60  # convert to minutes
 
 # Load results
+otp_db_fp = data_path / "otp_results.db"
+
 services = config_model["services"]
 
-otp_db_fp = data_path / "otp_results.db"
+for service in services:
+    service_type = service["service_type"]
+    if service_type not in service_weights:
+        raise ValueError(
+            f"Service type '{service_type}' not found in service_weights. Please check the configuration."
+        )
 
 # DubckDB connection
 # con = duckdb.connect()
@@ -62,128 +73,6 @@ duck_db_con.execute("LOAD spatial;")
 
 # %%
 
-
-def safe_wkb_load(val):
-
-    if isinstance(val, (bytes, memoryview, bytearray)):
-        return wkb.loads(bytes(val))  # Convert to raw bytes
-    return None
-
-
-def load_gdf_from_duckdb(
-    con: duckdb.DuckDBPyConnection, table_name: str, crs: str, limit: int
-) -> gpd.GeoDataFrame:
-    """
-    Load a GeoDataFrame from a DuckDB table with spatial support.
-    Converts WKB to Shapely geometries.
-    """
-    query = f'SELECT *, ST_AsWKB(geometry) AS geom_wkb FROM "{table_name}"'
-    if limit:
-        query += f" LIMIT {limit}"
-    df = con.execute(query).fetchdf()
-
-    df["geometry"] = df["geom_wkb"].apply(safe_wkb_load)
-
-    # Drop the WKB helper column
-    df = df.drop(columns=["geom_wkb"])
-
-    # Create GeoDataFrame
-    gdf = gpd.GeoDataFrame(df, geometry="geometry", crs=crs)
-
-    return gdf
-
-
-def export_gdf_to_duckdb_spatial(
-    gdf: gpd.GeoDataFrame, con: duckdb.DuckDBPyConnection, table_name: str
-):
-    """
-    Export a GeoDataFrame to DuckDB using the spatial extension.
-    Converts geometry to WKB and avoids GeoPandas warnings.
-    """
-
-    if gdf.empty:
-        raise ValueError("GeoDataFrame is empty.")
-
-    # Load DuckDB spatial extension
-    con.execute("INSTALL spatial;")
-    con.execute("LOAD spatial;")
-
-    # Convert geometry to WKB BEFORE assigning back to a DataFrame
-    geometry_wkb = gdf.geometry.apply(lambda geom: geom.wkb if geom else None)
-    df = gdf.drop(
-        columns=gdf.geometry.name
-    ).copy()  # drop geometry column before assignment
-    df["geometry"] = geometry_wkb  # now assign WKB as raw bytes
-
-    # Register with DuckDB and create spatial table
-    con.register("temp_gdf", df)
-
-    column_names = [f'"{col}"' for col in df.columns if col != "geometry"]
-    select_clause = ", ".join(column_names + ["ST_GeomFromWKB(geometry) AS geometry"])
-
-    con.execute(
-        f'CREATE OR REPLACE TABLE "{table_name}" AS SELECT {select_clause} FROM temp_gdf;'
-    )
-    con.unregister("temp_gdf")
-
-    print(f"GeoDataFrame with {len(df)} rows exported to DuckDB table '{table_name}'.")
-
-
-def combine_columns_from_tables(
-    column_names: list[str],
-    conn: duckdb.DuckDBPyConnection,
-    table_names: list[str],
-    common_id_column: str,
-    geometry_column: str = "geometry",
-    crs: str = "EPSG:25832",
-):
-    """
-    Combines specified columns from multiple tables into a single query result,
-    including the geometry column from the first table, properly converted to shapely geometries.
-
-    Parameters:
-    - column_names (list of str): The names of the columns to combine from each table.
-    - geometry_column (str): The name of the geometry column to include.
-    - conn: DuckDB connection object.
-    - table_names (list of str): List of table names to join.
-    - common_id_column (str): The common ID column to join tables on.
-    - crs (optional): CRS to assign to the output GeoDataFrame.
-    """
-
-    # Start building the SQL query
-    select_clause = f"t1.{common_id_column}, ST_AsWKB(t1.{geometry_column}) AS geom_wkb"
-    join_clause = ""
-
-    # Add each table's columns to SELECT and JOIN clauses
-    for i, table in enumerate(table_names):
-        alias = f"t{i+1}"
-        for column_name in column_names:  # Iterate over each column name
-            select_clause += f", {alias}.{column_name} AS {column_name}_{table}"
-        if i > 0:
-            join_clause += f' LEFT JOIN "{table}" {alias} ON t1.{common_id_column} = {alias}.{common_id_column}'
-
-    # Construct the full query
-    query = f"""
-    SELECT {select_clause}
-    FROM \"{table_names[0]}\" t1
-    {join_clause}
-    """
-
-    try:
-        df = conn.execute(query).fetchdf()
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return None
-
-    df[geometry_column] = df["geom_wkb"].apply(safe_wkb_load)
-    df = df.drop(columns=["geom_wkb"])
-
-    gdf = gpd.GeoDataFrame(df, geometry=geometry_column, crs=crs)
-
-    return gdf
-
-
-# %%
 summaries = []
 
 for service in services:
@@ -218,7 +107,6 @@ for service in services:
             f"Average wait time at destination for {dataset}: {ave_wait_time:.2f} minutes"
         )
 
-        # TODO: Export to duckdb
         export_gdf_to_duckdb_spatial(gdf, duck_db_con, dataset)
 
         print("\n")
@@ -299,26 +187,12 @@ styled_table
 # %%
 # Compute weighted travel times based on service importance
 
-
-# TODO: move to config file
-weight_dictionary = {
-    "doctor": 0.05,
-    "dentist": 0.05,
-    "pharmacy": 0.05,
-    "kindergarten-nursery": 5,
-    "school": 5,
-    "supermarket": 5,
-    "library": 1,
-    "train_station": 5,
-    "sports_facility": 1,
-}
-
 weight_cols = ["duration_min", "total_time_min"]
 
 for w in weight_cols:
 
     weighted_travel_times = compute_weighted_time(
-        services, 1, data_path / "input", weight_dictionary, w
+        services, 1, data_path / "input", service_weights, w
     )
 
     weighted_travel_times.to_parquet(
@@ -353,6 +227,8 @@ combined_gdf[total_col] = combined_gdf[sum_cols].sum(axis=1)
 # %%
 
 # compute average travel time per hex bin
+
+# TODO: HOW TO HANDLE LOCATIONS WITH NO RESULTS?
 
 aggregation_type = "ave_travel_times"
 
@@ -389,15 +265,42 @@ hex_avg_travel_times_gdf.to_parquet(
     results_path / f"data/hex_{aggregation_type}_otp.parquet",
 )
 
+# %%
+cols_to_average = [
+    col for col in hex_travel_times.columns if col.startswith("total_time_min")
+]
+nan_counts_per_hex = (
+    hex_travel_times.groupby(hex_id_col)[cols_to_average]
+    .apply(lambda group: group.isna().sum(), include_groups=False)
+    .reset_index()
+)
+
+
+nan_counts_per_hex.columns = [hex_id_col] + [
+    item.split("total_time_min_")[1] + "_nan_count"
+    for item in nan_counts_per_hex.columns[1:]
+]
+
+sum_cols = nan_counts_per_hex.columns[1:]
+nan_counts_per_hex["total_no_results"] = nan_counts_per_hex[sum_cols].sum(axis=1)
+
+nan_counts_per_hex_gdf = hex_grid.merge(nan_counts_per_hex, on=hex_id_col, how="left")
+
+nan_counts_per_hex_gdf.to_parquet(
+    results_path / "data/hex_nan_counts_per_service.parquet"
+)
+
 
 # %%
 
+# TODO: HOW TO HANDLE LOCATIONS WITH NO RESULTS?
+
 municipalities = gpd.read_parquet(config_analysis["municipalities_fp"])
 
-id_column = config_model["study_area_config"]["municipalities"]["id_column"]
-municipalities = municipalities[["geometry", id_column]]
+muni_id_col = config_model["study_area_config"]["municipalities"]["id_column"]
+municipalities = municipalities[["geometry", muni_id_col]]
 
-regional_travel_times = gpd.sjoin(
+municipal_travel_times = gpd.sjoin(
     municipalities,
     combined_gdf,
     how="inner",
@@ -406,23 +309,50 @@ regional_travel_times = gpd.sjoin(
     lsuffix="region",
 )
 
-
 cols_to_average = [
-    col for col in regional_travel_times.columns if col.endswith("_total_time_min")
+    col for col in municipal_travel_times.columns if col.startswith("total_time_min")
 ]
 cols_to_average.extend([total_col])
 
 municipal_avg_travel_times = (
-    regional_travel_times.groupby(id_column)[cols_to_average].mean().reset_index()
+    municipal_travel_times.groupby(muni_id_col)[cols_to_average].mean().reset_index()
 )
 
 municipal_avg_travel_times_gdf = municipalities.merge(
-    municipal_avg_travel_times, on=id_column, how="left"
+    municipal_avg_travel_times, on=muni_id_col, how="left"
 )
 
 municipal_avg_travel_times_gdf.to_parquet(
     results_path / f"data/municipal_{aggregation_type}_otp.parquet",
 )
 
+# %%
+# count no results per municipality
+cols_to_average = [
+    col for col in municipal_travel_times.columns if col.startswith("total_time_min")
+]
+
+nan_counts_per_muni = (
+    municipal_travel_times.groupby(muni_id_col)[cols_to_average]
+    .apply(lambda group: group.isna().sum(), include_groups=False)
+    .reset_index()
+)
+
+
+nan_counts_per_muni.columns = [muni_id_col] + [
+    item.split("total_time_min_")[1] + "_nan_count"
+    for item in nan_counts_per_muni.columns[1:]
+]
+
+sum_cols = nan_counts_per_muni.columns[1:]
+nan_counts_per_muni["total_no_results"] = nan_counts_per_muni[sum_cols].sum(axis=1)
+
+nan_counts_per_muni_gdf = municipalities[[muni_id_col, "geometry"]].merge(
+    nan_counts_per_muni, on=muni_id_col, how="left"
+)
+
+nan_counts_per_muni_gdf.to_parquet(
+    results_path / "data/muni_nan_counts_per_service.parquet"
+)
 
 # %%
