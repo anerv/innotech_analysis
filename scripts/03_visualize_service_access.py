@@ -87,3 +87,18 @@ for service in services:
 # %%
 
 # TODO: PLOT HEX travel time results
+
+nan_counts_per_hex_gdf.plot(
+    column="total_no_results",
+    cmap="OrRd",
+    legend=True,
+    figsize=(10, 10),
+    legend_kwds={"label": "Number of services with no results"},
+    missing_kwds={
+        "color": "white",
+        "alpha": 0.0,
+    },
+)
+
+
+nan_counts_per_muni_gdf.plot(column="total_no_results", legend=True, cmap="viridis")
