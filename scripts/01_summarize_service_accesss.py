@@ -62,9 +62,11 @@ for service in services:
             f"Service type '{service_type}' not found in service_weights. Please check the configuration."
         )
 
+
+# %%
 # DubckDB connection
 # con = duckdb.connect()
-# %%
+
 # Open a persistent DuckDB database file Data is stored in Duckdb and then exported to parquet
 duck_db_con = duckdb.connect(otp_db_fp)
 
@@ -72,6 +74,8 @@ duck_db_con.execute("INSTALL spatial;")
 duck_db_con.execute("LOAD spatial;")
 
 # %%
+
+# summarizing results for each service
 
 summaries = []
 
@@ -217,9 +221,7 @@ combined_gdf = combine_columns_from_tables(
     common_id_column="source_id",
 )
 
-# sum all columns that start with total_time_min
 
-# %%
 total_col = "travel_time_total_min"
 sum_cols = [col for col in combined_gdf.columns if col.startswith("total_time_min")]
 combined_gdf[total_col] = combined_gdf[sum_cols].sum(axis=1)
@@ -266,11 +268,12 @@ hex_avg_travel_times_gdf.to_parquet(
 )
 
 # %%
-cols_to_average = [
+# count no results per hex bin
+cols_to_include = [
     col for col in hex_travel_times.columns if col.startswith("total_time_min")
 ]
 nan_counts_per_hex = (
-    hex_travel_times.groupby(hex_id_col)[cols_to_average]
+    hex_travel_times.groupby(hex_id_col)[cols_to_include]
     .apply(lambda group: group.isna().sum(), include_groups=False)
     .reset_index()
 )
