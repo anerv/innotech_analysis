@@ -20,6 +20,130 @@ from zoneinfo import ZoneInfo
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import reduce
 from shapely import wkb
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from sklearn.metrics import adjusted_rand_score
+from scipy.spatial.distance import cdist
+import seaborn as sns
+
+############################# CLUSTERING FUNCTIONS #############################
+
+
+def find_k_elbow_method(input_data, min_k=1, max_k=10):
+    # Based on https://www.geeksforgeeks.org/elbow-method-for-optimal-value-of-k-in-kmeans/
+    distortions = []
+    inertias = []
+    mapping1 = {}
+    mapping2 = {}
+    K = range(min_k, max_k)
+
+    for k in K:
+        # Building and fitting the model
+        kmeanModel = KMeans(n_clusters=k).fit(input_data)
+
+        distortions.append(
+            sum(
+                np.min(
+                    cdist(input_data, kmeanModel.cluster_centers_, "euclidean"),
+                    axis=1,
+                )
+            )
+            / input_data.shape[0]
+        )
+        inertias.append(kmeanModel.inertia_)
+
+        mapping1[k] = (
+            sum(
+                np.min(
+                    cdist(input_data, kmeanModel.cluster_centers_, "euclidean"),
+                    axis=1,
+                )
+            )
+            / input_data.shape[0]
+        )
+        mapping2[k] = kmeanModel.inertia_
+
+    plt.plot(K, distortions, "bx-")
+    plt.xlabel("K")
+    plt.ylabel("Distortion")
+    plt.title("Elbow Method: Find best K")
+    plt.show()
+
+    return mapping1, mapping2
+
+
+def test_kmeans_with_different_seeds(k, scaled_data, seeds=[13, 42, 99], n_runs=10):
+    """
+    Test KMeans clustering with different random seeds and return the labels for each seed.
+
+    Parameters:
+    k (int): Number of clusters.
+    scaled_data (DataFrame): Scaled data for clustering.
+    seeds (list): List of random seeds to test.
+    n_runs (int): Number of runs for each seed.
+
+    Returns:
+    dict: Dictionary with seed as key and list of labels as value.
+    """
+    results = {}
+
+    for seed in seeds:
+        np.random.seed(seed)
+        kmeans = KMeans(n_clusters=k, n_init=n_runs)
+        k_class = kmeans.fit(scaled_data)
+        results[seed] = k_class.labels_
+
+    return results
+
+
+def visualize_clusters(scaled_data, labels_dict, seeds):
+    """
+    Visualize clusters obtained from different seeds using PCA.
+
+    Parameters:
+    scaled_data (numpy array): Scaled data for clustering.
+    labels_dict (dict): Dictionary with seed as key and list of labels as value.
+    seeds (list): List of random seeds used.
+    """
+    # Reduce dimensionality using PCA
+    pca = PCA(n_components=2)
+    principal_components = pca.fit_transform(scaled_data)
+
+    # Plot the clusters for each seed
+    plt.figure(figsize=(15, 5))
+    for i, seed in enumerate(seeds):
+        plt.subplot(1, len(seeds), i + 1)
+        labels = labels_dict[seed]
+        plt.scatter(
+            principal_components[:, 0],
+            principal_components[:, 1],
+            c=labels,
+            cmap="Set2",
+            alpha=0.6,
+        )
+        plt.title(f"Seed: {seed}")
+        plt.xlabel("Principal Component 1")
+        plt.ylabel("Principal Component 2")
+
+        sns.despine()
+    plt.tight_layout()
+    plt.show()
+
+
+def compare_clusterings(labels_dict, seeds):
+    """
+    Compare clusterings obtained from different seeds using Adjusted Rand Index.
+
+    Parameters:
+    labels_dict (dict): Dictionary with seed as key and list of labels as value.
+    seeds (list): List of random seeds used.
+    """
+    for i in range(len(seeds)):
+        for j in range(i + 1, len(seeds)):
+            seed1 = seeds[i]
+            seed2 = seeds[j]
+            ari = adjusted_rand_score(labels_dict[seed1], labels_dict[seed2])
+            print(f"ARI between seed {seed1} and seed {seed2}: {ari:.2f}")
 
 
 # ########################### DUCKDB FUNCTIONS ###########################
@@ -361,52 +485,52 @@ def combine_columns_from_tables(
 # ############################ RANDOM HELPER FUNCTIONS ############################
 
 
-def combine_results(
-    services,
-    path,
-    travel_time_columns,
-    id_column="source_id",
-    n_neighbors=1,
-):
+# def combine_results(
+#     services,
+#     path,
+#     travel_time_columns,
+#     id_column="source_id",
+#     n_neighbors=1,
+# ):
 
-    all_travel_times = []
+#     all_travel_times = []
 
-    for service in services:
+#     for service in services:
 
-        dataset = f"{service['service_type']}_{n_neighbors}"
-        fp = path / f"{dataset}_otp_geo.parquet"
-        if not fp.exists():
-            print(f"File {fp} does not exist. Skipping.")
-            continue
-        df = pd.read_parquet(fp)
+#         dataset = f"{service['service_type']}_{n_neighbors}"
+#         fp = path / f"{dataset}_otp_geo.parquet"
+#         if not fp.exists():
+#             print(f"File {fp} does not exist. Skipping.")
+#             continue
+#         df = pd.read_parquet(fp)
 
-        df = df[[id_column] + travel_time_columns]
+#         df = df[[id_column] + travel_time_columns]
 
-        rename_dict = {
-            col: f"{dataset}_{col}" for col in travel_time_columns if col in df.columns
-        }
+#         rename_dict = {
+#             col: f"{dataset}_{col}" for col in travel_time_columns if col in df.columns
+#         }
 
-        df.rename(columns=rename_dict, inplace=True)
+#         df.rename(columns=rename_dict, inplace=True)
 
-        all_travel_times.append(df)
+#         all_travel_times.append(df)
 
-    all_travel_times_df = reduce(
-        lambda left, right: pd.merge(left, right, on="source_id", how="outer"),
-        all_travel_times,
-    )
+#     all_travel_times_df = reduce(
+#         lambda left, right: pd.merge(left, right, on="source_id", how="outer"),
+#         all_travel_times,
+#     )
 
-    # get geoms
-    gdf = gpd.read_parquet(path / f"{dataset}_otp_geo.parquet")
+#     # get geoms
+#     gdf = gpd.read_parquet(path / f"{dataset}_otp_geo.parquet")
 
-    all_travel_times_gdf = pd.merge(
-        gdf[["source_id", "geometry"]], all_travel_times_df, on="source_id", how="left"
-    )
+#     all_travel_times_gdf = pd.merge(
+#         gdf[["source_id", "geometry"]], all_travel_times_df, on="source_id", how="left"
+#     )
 
-    assert len(all_travel_times_gdf) == len(
-        all_travel_times_df
-    ), "Mismatch in number of rows after merge."
+#     assert len(all_travel_times_gdf) == len(
+#         all_travel_times_df
+#     ), "Mismatch in number of rows after merge."
 
-    return all_travel_times_gdf
+#     return all_travel_times_gdf
 
 
 def compute_weighted_time(
