@@ -278,7 +278,6 @@ nan_counts_per_hex = (
     .reset_index()
 )
 
-
 nan_counts_per_hex.columns = [hex_id_col] + [
     item.split("total_time_min_")[1] + "_nan_count"
     for item in nan_counts_per_hex.columns[1:]
