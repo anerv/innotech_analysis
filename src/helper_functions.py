@@ -26,8 +26,89 @@ from sklearn.metrics import adjusted_rand_score
 from scipy.spatial.distance import cdist
 import seaborn as sns
 from IPython.display import display
+import matplotlib.pyplot as plt
+from sklearn.metrics import silhouette_score
+import warnings
+from matplotlib.patches import Patch
 
 ############################# CLUSTERING FUNCTIONS #############################
+
+
+def plot_silhouette_scores(
+    data, k_values, iterations=10, sample_size=None, global_seed=None
+):
+    """
+    Compute and plot silhouette scores for different k-values over multiple iterations of k-means.
+
+    Parameters:
+    - data: numpy array or similar, the input data to cluster.
+    - k_values: list of int, different numbers of clusters to try (must be ≥ 2).
+    - iterations: int, number of iterations for each k-value.
+    - sample_size: int or None. If set, silhouette score is computed on a random subset of this size.
+                   Useful for speeding up on large datasets.
+    - global_seed: int or None, for reproducibility of random sampling and clustering seeds.
+    """
+    if any(k < 2 for k in k_values):
+        raise ValueError("Silhouette score is undefined for k < 2.")
+
+    n_samples = len(data)
+    if sample_size is not None and sample_size > n_samples:
+        warnings.warn(
+            f"sample_size={sample_size} is greater than number of data points ({n_samples}). Using full data."
+        )
+        sample_size = None
+
+    rng = np.random.default_rng(global_seed)
+    silhouette_scores = np.zeros((len(k_values), iterations))
+
+    for i, k in enumerate(k_values):
+        for j in range(iterations):
+            seed = rng.integers(0, 1_000_000)
+            kmeans = KMeans(n_clusters=k, random_state=seed)
+            cluster_labels = kmeans.fit_predict(data)
+
+            score = silhouette_score(
+                data, cluster_labels, sample_size=sample_size, random_state=seed
+            )
+            silhouette_scores[i, j] = score
+
+    # Compute mean scores and identify best k
+    mean_scores = silhouette_scores.mean(axis=1)
+    best_index = np.argmax(mean_scores)
+    best_k = k_values[best_index]
+
+    # Plotting
+    plt.figure(figsize=(10, 6))
+    box = plt.boxplot(silhouette_scores.T, tick_labels=k_values, patch_artist=True)
+
+    # Set all boxes to light gray
+    for i, patch in enumerate(box["boxes"]):
+        patch.set_facecolor("#e0e0e0")  # light gray
+        if i == best_index:
+            patch.set_facecolor("#90CAF9")  # blue highlight for best k
+
+    # Custom legend
+    legend_elements = [
+        Patch(
+            facecolor="#90CAF9",
+            edgecolor="black",
+            label=f"Best k = {best_k} (mean score = {mean_scores[best_index]:.2f})",
+        )
+    ]
+    plt.legend(
+        handles=legend_elements,
+        frameon=True,
+        loc="upper right",
+        bbox_to_anchor=(1, 0.2),
+    )
+
+    # Final plot styling
+    plt.title("Silhouette scores for different k-values")
+    plt.xlabel("Number of clusters (k)")
+    plt.ylabel("Silhouette score")
+    plt.grid(True)
+    sns.despine(left=True, bottom=True)
+    plt.show()
 
 
 def get_mean_cluster_variables(gdf, cluster_col, cluster_variables):
