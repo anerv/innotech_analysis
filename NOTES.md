@@ -40,3 +40,31 @@ In summary, the main patterns indicate strong relationships within variables of 
 - Wait time at different destinations have fairly low correlations
 - Distances have fairly high correlations
 - Same for distances
+
+***
+
+## FOR HEX AGGREGATED DATA
+
+The correlation matrix you provided shows the relationships between various distance and time metrics for different types of locations such as doctors, dentists, pharmacies, schools, and others. Here's a summary of the patterns observed:
+
+1. **Strong Positive Correlations:**
+   - **Walking Distance, Absolute Distance, and Duration:** These metrics are generally strongly positively correlated across different types of locations. For example, `walkDistance_doctor_1` has high correlations with `duration_min_doctor_1` (0.95) and `total_time_min_doctor_1` (0.87). This pattern is consistent across other location types like dentists, pharmacies, and schools.
+   - **Total Time Metrics:** The total time metrics for different locations are also highly correlated with each other. For example, `total_time_min_doctor_1` is highly correlated with `total_time_min_dentist_1` (0.62) and `total_time_min_pharmacy_1` (0.59).
+
+2. **Moderate Positive Correlations:**
+   - **Inter-location Correlations:** There are moderate positive correlations between similar metrics across different locations. For example, `walkDistance_doctor_1` and `walkDistance_dentist_1` have a correlation of 0.63.
+   - **Duration and Total Time:** Duration and total time for the same location type are moderately to strongly correlated, indicating that longer durations generally lead to longer total times.
+
+3. **Weak or Negative Correlations:**
+   - **Waiting Time:** Waiting times at destinations (`wait_time_dest_min`) generally show weak or negative correlations with other metrics. For example, `wait_time_dest_min_doctor_1` has a weak correlation with `walkDistance_doctor_1` (-0.2) and `duration_min_doctor_1` (-0.05).
+   - **Total Waiting Time:** The total waiting time has weak correlations with most other metrics, indicating that waiting times are somewhat independent of travel distances and durations.
+
+4. **Specific Observations:**
+   - **Pharmacy Metrics:** Pharmacy-related metrics like `walkDistance_pharmacy_1` and `duration_min_pharmacy_1` show strong correlations (0.91), indicating that walking distance is a significant factor in the duration to reach a pharmacy.
+   - **Kindergarten/Nursery Metrics:** Metrics related to kindergartens and nurseries also show strong internal correlations, such as `walkDistance_kindergarten_nursery_1` and `duration_min_kindergarten_nursery_1` (0.98).
+
+5. **Overall Trends:**
+   - **Consistency Across Locations:** The patterns of strong correlations between walking distance, absolute distance, and duration are consistent across different types of locations.
+   - **Total Travel and Total Time:** The total travel time and total time metrics are highly correlated (0.98), indicating that the majority of the total time is composed of travel time.
+
+In summary, the correlation matrix reveals that walking distances, absolute distances, and durations are strongly interrelated across various locations. Waiting times tend to be less correlated with these metrics, suggesting they are influenced by different factors.
