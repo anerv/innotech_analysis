@@ -25,8 +25,254 @@ from sklearn.decomposition import PCA
 from sklearn.metrics import adjusted_rand_score
 from scipy.spatial.distance import cdist
 import seaborn as sns
+from IPython.display import display
 
 ############################# CLUSTERING FUNCTIONS #############################
+
+
+def get_mean_cluster_variables(gdf, cluster_col, cluster_variables):
+
+    cluster_means = gdf.groupby(cluster_col)[cluster_variables].mean()
+
+    cluster_means = cluster_means.T.round(3)
+
+    return cluster_means
+
+
+def plot_cluster_variable_distributions(
+    gdf,
+    cluster_col,
+    cluster_variables,
+    fp,
+    palette="Set1",
+):
+    """
+    Plot the distributions of cluster variables using kernel density estimation (KDE).
+
+    Parameters:
+    gdf (GeoDataFrame): The GeoDataFrame containing the data.
+    cluster_col (str): The name of the column representing the clusters.
+    cluster_variables (list): The list of variables to plot.
+    fp (str): The file path to save the plot.
+    palette (str, optional): The color palette to use for the plot.".
+
+    Returns:
+    None
+    """
+    tidy_df = gdf.set_index(cluster_col)
+    tidy_df = tidy_df[cluster_variables]
+    tidy_df = tidy_df.stack()
+    tidy_df = tidy_df.reset_index()
+    tidy_df = tidy_df.rename(columns={"level_1": "Attribute", 0: "Values"})
+
+    sns.set_theme(font_scale=1.5, style="white")
+
+    facets = sns.FacetGrid(
+        data=tidy_df,
+        col="Attribute",
+        hue=cluster_col,
+        sharey=False,
+        sharex=False,
+        aspect=2,
+        col_wrap=3,
+        palette=palette,
+    )
+    fig = facets.map(
+        sns.kdeplot,
+        "Values",
+        fill=False,
+        warn_singular=False,
+        multiple="stack",
+    )
+
+    fig.add_legend(title="Cluster", bbox_to_anchor=(1.05, 1), loc="upper left")
+    fig.savefig(fp)
+
+
+def plot_clustering(
+    gdf,
+    cluster_col,
+    fp,
+    figsize=(15, 15),
+    cmap="Set2",
+    fontsize=12,
+    add_attribution=True,
+    attr="© OSM, KDS",
+):
+    """
+    Plot clustering results on a GeoDataFrame.
+
+    Parameters:
+    gdf (GeoDataFrame): The GeoDataFrame containing the data to be plotted.
+    cluster_col (str): The name of the column in the GeoDataFrame that represents the clustering results.
+    fp (str): The file path where the plot will be saved.
+    figsize (tuple, optional): The size of the figure.
+    cmap (str or Colormap, optional): The colormap to be used for the plot. Defaults to pdict["cat"].
+
+    Returns:
+    None
+    """
+
+    _, ax = plt.subplots(1, figsize=figsize)
+
+    gdf.plot(
+        column=cluster_col,
+        categorical=True,
+        legend=True,
+        legend_kwds={
+            "frameon": False,
+            "bbox_to_anchor": (0.99, 1),
+            "fontsize": fontsize,
+        },
+        ax=ax,
+        cmap=cmap,
+        linewidth=0.1,
+    )
+
+    if add_attribution:
+        cx.add_attribution(ax=ax, text="(C) " + attr)
+        txt = ax.texts[-1]
+        txt.set_position([0.99, 0.01])
+        txt.set_ha("right")
+        txt.set_va("bottom")
+        txt.set_fontsize(fontsize)
+
+    ax.add_artist(
+        ScaleBar(
+            dx=1,
+            units="m",
+            dimension="si-length",
+            length_fraction=0.15,
+            width_fraction=0.002,
+            location="lower left",
+            box_alpha=0,
+            font_properties={"size": fontsize},
+        )
+    )
+
+    ax.set_axis_off()
+
+    plt.tight_layout()
+
+    plt.savefig(fp, bbox_inches="tight", dpi=300)
+
+    plt.show()
+
+
+def plot_cluster_sizes(
+    cluster_sizes,
+    cluster_areas,
+    fp,
+):
+    """
+    Plots the cluster sizes and areas as a bar chart.
+
+    Args:
+        cluster_sizes (list): A list of integers representing the sizes of each cluster.
+        cluster_areas (list): A list of floats representing the areas of each cluster.
+        fp (str): The file path to save the plot.
+
+    Returns:
+        None
+    """
+    __, ax = plt.subplots(1, figsize=(15, 10))
+    area_tracts = pd.DataFrame({"No. Tracts": cluster_sizes, "Area": cluster_areas})
+    area_tracts = area_tracts * 100 / area_tracts.sum()
+    ax = area_tracts.plot.bar(ax=ax)
+    ax.set_xlabel("Cluster labels")
+    ax.set_ylabel("Percentage by cluster")
+    ax.legend(frameon=False)
+
+    sns.despine()
+
+    plt.savefig(fp)
+
+    plt.show()
+
+
+def evaluate_cluster_sizes(gdf, cluster_col):
+
+    cluster_sizes = gdf.groupby(cluster_col).size()
+
+    return cluster_sizes
+
+
+def evaluate_cluster_areas(gdf, cluster_col):
+
+    gdf["area_sqkm"] = gdf.area / 10**6
+    cluster_areas = gdf.dissolve(by=cluster_col, aggfunc="sum")["area_sqkm"]
+
+    return cluster_areas
+
+
+def examine_cluster_results(
+    gdf,
+    cluster_col,
+    cluster_variables,
+    fp_map,
+    fp_size,
+    fp_kde,
+    cmap,
+    palette,
+):
+
+    plot_clustering(gdf, cluster_col, fp_map, cmap=cmap)
+
+    cluster_sizes = evaluate_cluster_sizes(gdf, cluster_col)
+
+    cluster_areas = evaluate_cluster_areas(gdf, cluster_col)
+
+    plot_cluster_sizes(cluster_sizes, cluster_areas, fp_size)
+
+    cluster_means = get_mean_cluster_variables(gdf, cluster_col, cluster_variables)
+
+    plot_cluster_variable_distributions(
+        gdf, cluster_col, cluster_variables, fp_kde, palette=palette
+    )
+
+    return cluster_means
+
+
+def style_cluster_means(cluster_means, cmap="coolwarm"):
+    """
+    Apply background gradient styling to a DataFrame representing cluster means.
+
+    Parameters:
+    - cluster_means (pd.DataFrame): The DataFrame containing the cluster means.
+    - cmap (str, optional): The colormap to use for the background gradient. Default is "coolwarm".
+
+    Returns:
+    - None
+
+    Example:
+    >>> style_cluster_means(cluster_means, cmap="viridis")
+    """
+
+    styler = cluster_means.style
+    styler_dict = {}
+    for i in cluster_means.index:
+        styler_dict[i] = "coolwarm"
+
+    for idx, cmap in styler_dict.items():
+        styler = styler.background_gradient(
+            cmap=cmap, subset=pd.IndexSlice[idx, :], axis=1
+        )
+
+        cluster_means_styled = cluster_means.style.background_gradient(
+            cmap=cmap, subset=pd.IndexSlice[:, :], axis=1
+        )
+
+    display(cluster_means_styled)
+
+
+def run_kmeans(k, scaled_data, seed=13):
+
+    np.random.seed(seed)
+
+    kmeans = KMeans(n_clusters=k)
+    k_class = kmeans.fit(scaled_data)
+
+    return k_class.labels_
 
 
 def find_k_elbow_method(input_data, min_k=1, max_k=10):
