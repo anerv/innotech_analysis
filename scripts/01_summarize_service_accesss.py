@@ -268,29 +268,29 @@ hex_avg_travel_times_gdf.to_parquet(
 )
 
 # %%
-# count no results per hex bin
-cols_to_include = [
-    col for col in hex_travel_times.columns if col.startswith("total_time_min")
-]
-nan_counts_per_hex = (
-    hex_travel_times.groupby(hex_id_col)[cols_to_include]
-    .apply(lambda group: group.isna().sum(), include_groups=False)
-    .reset_index()
-)
+# # count no results per hex bin
+# cols_to_include = [
+#     col for col in hex_travel_times.columns if col.startswith("total_time_min")
+# ]
+# nan_counts_per_hex = (
+#     hex_travel_times.groupby(hex_id_col)[cols_to_include]
+#     .apply(lambda group: group.isna().sum(), include_groups=False)
+#     .reset_index()
+# )
 
-nan_counts_per_hex.columns = [hex_id_col] + [
-    item.split("total_time_min_")[1] + "_nan_count"
-    for item in nan_counts_per_hex.columns[1:]
-]
+# nan_counts_per_hex.columns = [hex_id_col] + [
+#     item.split("total_time_min_")[1] + "_nan_count"
+#     for item in nan_counts_per_hex.columns[1:]
+# ]
 
-sum_cols = nan_counts_per_hex.columns[1:]
-nan_counts_per_hex["total_no_results"] = nan_counts_per_hex[sum_cols].sum(axis=1)
+# sum_cols = nan_counts_per_hex.columns[1:]
+# nan_counts_per_hex["total_no_results"] = nan_counts_per_hex[sum_cols].sum(axis=1)
 
-nan_counts_per_hex_gdf = hex_grid.merge(nan_counts_per_hex, on=hex_id_col, how="left")
+# nan_counts_per_hex_gdf = hex_grid.merge(nan_counts_per_hex, on=hex_id_col, how="left")
 
-nan_counts_per_hex_gdf.to_parquet(
-    results_path / "data/hex_nan_counts_per_service.parquet"
-)
+# nan_counts_per_hex_gdf.to_parquet(
+#     results_path / "data/hex_nan_counts_per_service.parquet"
+# )
 
 
 # %%

@@ -257,7 +257,7 @@ def plot_cluster_sizes(
         None
     """
     __, ax = plt.subplots(1, figsize=(15, 10))
-    area_tracts = pd.DataFrame({"No. Tracts": cluster_sizes, "Area": cluster_areas})
+    area_tracts = pd.DataFrame({"No. areas": cluster_sizes, "Area": cluster_areas})
     area_tracts = area_tracts * 100 / area_tracts.sum()
     ax = area_tracts.plot.bar(ax=ax)
     ax.set_xlabel("Cluster labels")
