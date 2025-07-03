@@ -3,7 +3,6 @@ study_area_fp : "../data/input/study_area.gpkg" # Path to the study area file
 municipalities_fp : "../data/input/municipalities.parquet" # Path to the municipalities file
 crs : "EPSG:25832" # The coordinate reference system used for the data, must be the same as the data files
 
-
 service_weights:
   doctor: 0.05
   dentist: 0.05
@@ -14,3 +13,11 @@ service_weights:
   library: 1
   train_station: 5
   sports_facility: 1
+
+
+
+drop_islands: true # Whether to drop islands in the analysis (will often have no trips/results due to travel data missing ferries)
+max_wait_time: # 120 # Maximum waiting time in seconds, leave empty to disable
+max_duration: # 480 # Maximum travel duration in seconds, leave empty to disable
+
+islands_fp : "../data/input/islands.gpkg" # Path to the islands file, used if drop_islands is true

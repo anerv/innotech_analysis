@@ -65,7 +65,6 @@ for service in services:
 
 # %%
 # DubckDB connection
-# con = duckdb.connect()
 
 # Open a persistent DuckDB database file Data is stored in Duckdb and then exported to parquet
 duck_db_con = duckdb.connect(otp_db_fp)
@@ -206,25 +205,29 @@ for w in weight_cols:
     )
 
 
+# TODO: Visualize  weighted travel times on map
+# TODO: make histogram of weighted travel times
 # %%
 
 # Combine results from all services into a single GeoDataFrame
 
-column_names = ["duration_min", "wait_time_dest_min", "total_time_min"]
-table_names = [s["service_type"] + "_1" for s in services]
+# TODO: Use duckdb and separate script to combine results
+
+# column_names = ["duration_min", "wait_time_dest_min", "total_time_min"]
+# table_names = [s["service_type"] + "_1" for s in services]
 
 
-combined_gdf = combine_columns_from_tables(
-    column_names,
-    conn=duck_db_con,
-    table_names=table_names,
-    common_id_column="source_id",
-)
+# combined_gdf = combine_columns_from_tables(
+#     column_names,
+#     conn=duck_db_con,
+#     table_names=table_names,
+#     common_id_column="source_id",
+# )
 
 
-total_col = "travel_time_total_min"
-sum_cols = [col for col in combined_gdf.columns if col.startswith("total_time_min")]
-combined_gdf[total_col] = combined_gdf[sum_cols].sum(axis=1)
+# total_col = "travel_time_total_min"
+# sum_cols = [col for col in combined_gdf.columns if col.startswith("total_time_min")]
+# combined_gdf[total_col] = combined_gdf[sum_cols].sum(axis=1)
 
 # %%
 
@@ -232,40 +235,45 @@ combined_gdf[total_col] = combined_gdf[sum_cols].sum(axis=1)
 
 # TODO: HOW TO HANDLE LOCATIONS WITH NO RESULTS?
 
-aggregation_type = "ave_travel_times"
-
 study_area = gpd.read_file(config_analysis["study_area_fp"])
 
-hex_grid = create_hex_grid(study_area, 6, crs, 200)
-
-hex_travel_times = gpd.sjoin(
-    hex_grid,
-    combined_gdf,
-    how="inner",
-    predicate="intersects",
-    rsuffix="travel",
-    lsuffix="hex",
-)
-
-hex_id_col = "grid_id"
-
-cols_to_average = [
-    col for col in hex_travel_times.columns if col.startswith("total_time_min")
-]
-cols_to_average.extend([total_col])
+# TODO: load aggregated data from helper script
+# TODO: visualize aggregated travel and wait times on map
+# TODO: also include only walk, modes, no solutions, etc
 
 
-hex_avg_travel_times = (
-    hex_travel_times.groupby(hex_id_col)[cols_to_average].mean().reset_index()
-)
+# aggregation_type = "ave_travel_times"
 
-hex_avg_travel_times_gdf = hex_grid.merge(
-    hex_avg_travel_times, on="grid_id", how="left"
-)
+# hex_grid = create_hex_grid(study_area, 6, crs, 200)
 
-hex_avg_travel_times_gdf.to_parquet(
-    results_path / f"data/hex_{aggregation_type}_otp.parquet",
-)
+# hex_travel_times = gpd.sjoin(
+#     hex_grid,
+#     combined_gdf,
+#     how="inner",
+#     predicate="intersects",
+#     rsuffix="travel",
+#     lsuffix="hex",
+# )
+
+# hex_id_col = "grid_id"
+
+# cols_to_average = [
+#     col for col in hex_travel_times.columns if col.startswith("total_time_min")
+# ]
+# cols_to_average.extend([total_col])
+
+
+# hex_avg_travel_times = (
+#     hex_travel_times.groupby(hex_id_col)[cols_to_average].mean().reset_index()
+# )
+
+# hex_avg_travel_times_gdf = hex_grid.merge(
+#     hex_avg_travel_times, on="grid_id", how="left"
+# )
+
+# hex_avg_travel_times_gdf.to_parquet(
+#     results_path / f"data/hex_{aggregation_type}_otp.parquet",
+# )
 
 # %%
 # # count no results per hex bin
@@ -296,6 +304,10 @@ hex_avg_travel_times_gdf.to_parquet(
 # %%
 
 # TODO: HOW TO HANDLE LOCATIONS WITH NO RESULTS?
+
+# TODO: load aggregated data from helper script
+# TODO: visualize aggregated travel and wait times on map
+# TODO: also include only walk, modes, no solutions, etc
 
 municipalities = gpd.read_parquet(config_analysis["municipalities_fp"])
 

@@ -2,11 +2,8 @@
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import robust_scale
 import geopandas as gpd
-import seaborn as sns
+import duckdb
 import yaml
 from pathlib import Path
 
@@ -14,8 +11,6 @@ from src.helper_functions import (
     combine_columns_from_tables,
     create_hex_grid,
 )
-from IPython.display import display
-import duckdb
 
 
 # Define the path to the config.yml file
@@ -31,6 +26,11 @@ with open(config_analysis_path, "r") as file:
     config_analysis = yaml.safe_load(file)
 
     crs = config_analysis["crs"]
+    max_wait_time = config_analysis.get("max_wait_time", None)
+    max_duration = config_analysis.get("max_duration", None)
+    drop_islands = config_analysis.get("drop_islands", False)
+
+    islands_fp = config_analysis.get("islands_fp", None)
 
 with open(config_model_path, "r") as file:
     config_model = yaml.safe_load(file)
@@ -51,23 +51,32 @@ services = config_model["services"]
 # TODO: Use config to choose aggregated or non aggregated data?
 # Use when exporting to not overwrite results
 # TODO: find ways to drop islands
-# TODO: option to drop locations with long wait times
+
 # TODO: config for how to handle no results
 
 ####### GET DATA ##########
 
 table_names = [s["service_type"] + "_1" for s in services]
 
-# TODO: INCLUDE TRAVEL MODES??
+random_table = gpd.read_parquet(
+    data_path / "input" / f"{table_names[0]}_otp_geo.parquet"
+)
+
+existing_cols = random_table.columns.tolist()
+
+
 travel_time_columns = [
-    # "waitingTime",
+    "waitingTime",
     "walkDistance",
     "abs_dist",
     "duration_min",
     "wait_time_dest_min",
     "total_time_min",
-    # "transfers",
+    "transfers",
 ]
+
+travel_time_columns.extend([c for c in existing_cols if "_duration" in c])
+
 
 all_travel_times_gdf = combine_columns_from_tables(
     travel_time_columns,
@@ -77,6 +86,16 @@ all_travel_times_gdf = combine_columns_from_tables(
     "geometry",
     crs,
 )
+
+# %%
+
+if drop_islands:
+
+    # TODO: prepare islands file
+    # explode boundaries
+    # manually select islands
+
+    islands = gpd.read_file(islands_fp)
 
 # %%
 # Aggregate by hex grid
