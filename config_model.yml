@@ -1,6 +1,7 @@
 # This is a configuration file for the service location model.
 
 # All data referenced under INPUT DATA must be downloaded and placed in the data directory. Update paths and file names as needed.
+# Additionally, transit data in the NeTEx-format must be downloaded and placed in the otp directory.
 
 crs : "EPSG:25832" # The coordinate reference system used for the data, must be the same as the data files
 
@@ -14,7 +15,7 @@ study_area_config:
   regions: # if model is only to be run for a single municipality, provide the filepath to the municipal boundaries here, change study_area_name to the kommunekode or name and the id_column to kommunekode or navn
     inputpath: "../data/input/DAGI10MULTIGEOM_GPKG_HF_20250504080002/regionsinddeling.gpkg"
     outputpath: "../data/processed/adm_boundaries/study_area.gpkg"
-    study_area_name: "Region Sjælland"
+    study_area_name: "Region Sjælland" # or code
     id_column: "navn"
   municipalities:
     inputpath: "../data/input/DAGI10MULTIGEOM_GPKG_HF_20250504080002/kommuneinddeling.gpkg" 
@@ -172,7 +173,7 @@ restrictions:
       id_attribute: kommunekode
 
 # The following parameters are used when calling OTP
-sample_size : 0 # Munber of rows to sample from the data, 0 = all
+sample_size : 0 # Nunber of rows to sample from the data, 0 = all
 chunk_size : 5000  # number of rows to load into memory
 parallelism : 10  # The number of parallel processes to use when calling OTP
 
