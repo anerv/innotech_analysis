@@ -15,7 +15,9 @@ study_area_config:
   regions: # if model is only to be run for a single municipality, provide the filepath to the municipal boundaries here, change study_area_name to the kommunekode or name and the id_column to kommunekode or navn
     inputpath: "../data/input/DAGI10MULTIGEOM_GPKG_HF_20250504080002/regionsinddeling.gpkg"
     outputpath: "../data/processed/adm_boundaries/study_area.gpkg"
-    study_area_name: "Region Sjælland" # or code
+    study_area_name: 
+    - "Region Sjælland" # or code
+    # if more than one region/municipality is wanted, add multiple names/codes here as a list
     id_column: "navn"
   municipalities:
     inputpath: "../data/input/DAGI10MULTIGEOM_GPKG_HF_20250504080002/kommuneinddeling.gpkg" 
@@ -188,8 +190,9 @@ otp_url : "http://localhost:8080/otp/gtfs/v1" #
 
 otp_results : "otp_results.db" # The persistant duckdb  where the OTP results are stored
 
-# Define date used for OTP query (the time is defined in the service array)
-travel_date : "2025-04-22"
+# OBS: The date must be within the valid time range in the downloaded NeTEx data
+# For valid date, see one of the included HTML files in the otp/netex directory (check for dates in this pattern: <FromDate>202X-XX-XXT00:00:00</FromDate><ToDate>202X-XX-XXT00:00:00</ToDate>)
+travel_date : "2025-04-25" # The date used for the OTP query in the format YYYY-MM-DD
 
 
 # Filepaths for input data when calculating the travel matrix in the nearest.py (to and from)
