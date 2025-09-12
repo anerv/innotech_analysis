@@ -9,6 +9,10 @@ from pathlib import Path
 import os
 import sys
 import duckdb
+import matplotlib.pyplot as plt
+import seaborn as sns
+import contextily as cx
+from matplotlib_scalebar.scalebar import ScaleBar
 
 from src.helper_functions import (
     highlight_max_traveltime,
@@ -204,34 +208,73 @@ for w in weight_cols:
         engine="pyarrow",
     )
 
+plt.figure(figsize=(8, 5))
+plt.hist(
+    weighted_travel_times["total_weighted_time"].dropna(),
+    bins=30,
+    color="skyblue",
+    edgecolor="black",
+)
+plt.xlabel("Total Weighted Travel Time (min)")
+plt.ylabel("Frequency")
+plt.title("Histogram of Total Weighted Travel Times")
+# plt.grid(axis="y", alpha=0.75)
+sns.despine()
+plt.tight_layout()
+plt.show()
 
-# TODO: Visualize  weighted travel times on map
-# TODO: make histogram of weighted travel times
+# Map of weighted travel times
+font_size = 12
+study_area = gpd.read_file("../data/input/study_area.gpkg")
+
+fig, ax = plt.subplots(figsize=(15, 10))
+
+study_area.plot(ax=ax, color="white", edgecolor="black", linewidth=0.5)
+
+weighted_travel_times.plot(
+    ax=ax,
+    column="total_weighted_time",
+    legend=True,
+    cmap="viridis",
+    markersize=0.5,
+    scheme="user_defined",
+    classification_kwds={"bins": [1000, 2000, 3000, 4000, 5000]},
+    legend_kwds={
+        # "title": "Total vægtet rejsetid (minutter)",
+        # "bbox_to_anchor": (0.5, 1.05),
+        # "loc": "lower center",
+        "fmt": "{:.0f}",
+        "fontsize": font_size,
+        "frameon": False,
+    },
+)
+ax.set_axis_off()
+plt.title("Total vægtet rejsetid (minutter)")
+
+ax.add_artist(
+    ScaleBar(
+        dx=1,
+        units="m",
+        dimension="si-length",
+        length_fraction=0.15,
+        width_fraction=0.002,
+        location="lower left",
+        box_alpha=0,
+        font_properties={"size": font_size},
+    )
+)
+
+plt.tight_layout()
+plt.show()
+
+
 # %%
 
-# Combine results from all services into a single GeoDataFrame
+# TODO: compute total travel time in 2 different ways (total duration for all services, total duration + wait time at destination)
 
-# TODO: Use duckdb and separate script to combine results
-
-# column_names = ["duration_min", "wait_time_dest_min", "total_time_min"]
-# table_names = [s["service_type"] + "_1" for s in services]
-
-
-# combined_gdf = combine_columns_from_tables(
-#     column_names,
-#     conn=duck_db_con,
-#     table_names=table_names,
-#     common_id_column="source_id",
-# )
-
-
-# total_col = "travel_time_total_min"
-# sum_cols = [col for col in combined_gdf.columns if col.startswith("total_time_min")]
-# combined_gdf[total_col] = combined_gdf[sum_cols].sum(axis=1)
 
 # %%
-
-# compute average travel time per hex bin
+# compute travel time per hex bin
 
 # TODO: HOW TO HANDLE LOCATIONS WITH NO RESULTS?
 
@@ -303,70 +346,72 @@ study_area = gpd.read_file(config_analysis["study_area_fp"])
 
 # %%
 
+#  Municipality level aggregation
+
 # TODO: HOW TO HANDLE LOCATIONS WITH NO RESULTS?
 
 # TODO: load aggregated data from helper script
 # TODO: visualize aggregated travel and wait times on map
 # TODO: also include only walk, modes, no solutions, etc
 
-municipalities = gpd.read_parquet(config_analysis["municipalities_fp"])
+# municipalities = gpd.read_parquet(config_analysis["municipalities_fp"])
 
-muni_id_col = config_model["study_area_config"]["municipalities"]["id_column"]
-municipalities = municipalities[["geometry", muni_id_col]]
+# muni_id_col = config_model["study_area_config"]["municipalities"]["id_column"]
+# municipalities = municipalities[["geometry", muni_id_col]]
 
-municipal_travel_times = gpd.sjoin(
-    municipalities,
-    combined_gdf,
-    how="inner",
-    predicate="intersects",
-    rsuffix="travel",
-    lsuffix="region",
-)
+# municipal_travel_times = gpd.sjoin(
+#     municipalities,
+#     combined_gdf,
+#     how="inner",
+#     predicate="intersects",
+#     rsuffix="travel",
+#     lsuffix="region",
+# )
 
-cols_to_average = [
-    col for col in municipal_travel_times.columns if col.startswith("total_time_min")
-]
-cols_to_average.extend([total_col])
+# cols_to_average = [
+#     col for col in municipal_travel_times.columns if col.startswith("total_time_min")
+# ]
+# cols_to_average.extend([total_col])
 
-municipal_avg_travel_times = (
-    municipal_travel_times.groupby(muni_id_col)[cols_to_average].mean().reset_index()
-)
+# municipal_avg_travel_times = (
+#     municipal_travel_times.groupby(muni_id_col)[cols_to_average].mean().reset_index()
+# )
 
-municipal_avg_travel_times_gdf = municipalities.merge(
-    municipal_avg_travel_times, on=muni_id_col, how="left"
-)
+# municipal_avg_travel_times_gdf = municipalities.merge(
+#     municipal_avg_travel_times, on=muni_id_col, how="left"
+# )
 
-municipal_avg_travel_times_gdf.to_parquet(
-    results_path / f"data/municipal_{aggregation_type}_otp.parquet",
-)
+# municipal_avg_travel_times_gdf.to_parquet(
+#     results_path / f"data/municipal_{aggregation_type}_otp.parquet",
+# )
 
-# %%
-# count no results per municipality
-cols_to_average = [
-    col for col in municipal_travel_times.columns if col.startswith("total_time_min")
-]
+# # %%
+# # count no results per municipality
+# cols_to_average = [
+#     col for col in municipal_travel_times.columns if col.startswith("total_time_min")
+# ]
 
-nan_counts_per_muni = (
-    municipal_travel_times.groupby(muni_id_col)[cols_to_average]
-    .apply(lambda group: group.isna().sum(), include_groups=False)
-    .reset_index()
-)
+# nan_counts_per_muni = (
+#     municipal_travel_times.groupby(muni_id_col)[cols_to_average]
+#     .apply(lambda group: group.isna().sum(), include_groups=False)
+#     .reset_index()
+# )
 
 
-nan_counts_per_muni.columns = [muni_id_col] + [
-    item.split("total_time_min_")[1] + "_nan_count"
-    for item in nan_counts_per_muni.columns[1:]
-]
+# nan_counts_per_muni.columns = [muni_id_col] + [
+#     item.split("total_time_min_")[1] + "_nan_count"
+#     for item in nan_counts_per_muni.columns[1:]
+# ]
 
-sum_cols = nan_counts_per_muni.columns[1:]
-nan_counts_per_muni["total_no_results"] = nan_counts_per_muni[sum_cols].sum(axis=1)
+# sum_cols = nan_counts_per_muni.columns[1:]
+# nan_counts_per_muni["total_no_results"] = nan_counts_per_muni[sum_cols].sum(axis=1)
 
-nan_counts_per_muni_gdf = municipalities[[muni_id_col, "geometry"]].merge(
-    nan_counts_per_muni, on=muni_id_col, how="left"
-)
+# nan_counts_per_muni_gdf = municipalities[[muni_id_col, "geometry"]].merge(
+#     nan_counts_per_muni, on=muni_id_col, how="left"
+# )
 
-nan_counts_per_muni_gdf.to_parquet(
-    results_path / "data/muni_nan_counts_per_service.parquet"
-)
+# # nan_counts_per_muni_gdf.to_parquet(
+# #     results_path / "data/muni_nan_counts_per_service.parquet"
+# # )
 
 # %%
