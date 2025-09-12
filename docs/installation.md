@@ -22,6 +22,8 @@ pip install generativepy
 python setup_folders.py
 ```
 
+Must be run using wsl!
+
 ````bash
 chmod +x copy_input_data.sh
 bash copy_input_data.sh /mnt/c/Users/anerv/repositories/innotech
