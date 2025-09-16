@@ -484,7 +484,7 @@ def safe_wkb_load(val):
 
 
 def load_gdf_from_duckdb(
-    con: duckdb.DuckDBPyConnection, table_name: str, crs: str, limit: int
+    con: duckdb.DuckDBPyConnection, table_name: str, crs: str, limit: None | int = None
 ) -> gpd.GeoDataFrame:
     """
     Load a GeoDataFrame from a DuckDB table with spatial support.
