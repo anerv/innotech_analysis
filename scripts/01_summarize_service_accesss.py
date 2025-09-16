@@ -21,7 +21,8 @@ from src.helper_functions import (
     compute_weighted_time,
     export_gdf_to_duckdb_spatial,
     combine_columns_from_tables,
-    export_gdf_to_duckdb_spatial,
+    load_gdf_from_duckdb,
+    safe_wkb_load,
 )
 
 
@@ -208,77 +209,249 @@ for w in weight_cols:
         engine="pyarrow",
     )
 
-plt.figure(figsize=(8, 5))
-plt.hist(
-    weighted_travel_times["total_weighted_time"].dropna(),
-    bins=30,
-    color="skyblue",
-    edgecolor="black",
+# plt.figure(figsize=(8, 5))
+# plt.hist(
+#     weighted_travel_times["total_weighted_time"].dropna(),
+#     bins=30,
+#     color="skyblue",
+#     edgecolor="black",
+# )
+# plt.xlabel("Total Weighted Travel Time (min)")
+# plt.ylabel("Frequency")
+# plt.title("Histogram of Total Weighted Travel Times")
+# # plt.grid(axis="y", alpha=0.75)
+# sns.despine()
+# plt.tight_layout()
+# plt.savefig(results_path / "plots/weighted_travel_time_histogram.png", dpi=300)
+# plt.show()
+
+
+def plot_histogram(data, column, title, xlabel, ylabel, output_fp, bins=30):
+    plt.figure(figsize=(8, 5))
+    plt.hist(
+        data[column].dropna(),
+        bins=bins,
+        color="skyblue",
+        edgecolor="black",
+    )
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    # plt.grid(axis="y", alpha=0.75)
+    plt.title(title)
+    sns.despine()
+    plt.tight_layout()
+    plt.savefig(output_fp, dpi=300)
+    plt.show()
+
+
+plot_histogram(
+    weighted_travel_times,
+    "total_weighted_time",
+    "Histogram of Total Weighted Travel Times",
+    "Total Weighted Travel Time (min)",
+    "Frequency",
+    results_path / "plots/weighted_travel_time_histogram.png",
 )
-plt.xlabel("Total Weighted Travel Time (min)")
-plt.ylabel("Frequency")
-plt.title("Histogram of Total Weighted Travel Times")
-# plt.grid(axis="y", alpha=0.75)
-sns.despine()
-plt.tight_layout()
-plt.show()
 
-# Map of weighted travel times
-font_size = 12
-study_area = gpd.read_file("../data/input/study_area.gpkg")
+# # Map of weighted travel times
+# font_size = 12
+# study_area = gpd.read_file("../data/input/study_area.gpkg")
 
-fig, ax = plt.subplots(figsize=(15, 10))
+# fig, ax = plt.subplots(figsize=(15, 10))
 
-study_area.plot(ax=ax, color="white", edgecolor="black", linewidth=0.5)
+# study_area.plot(ax=ax, color="white", edgecolor="black", linewidth=0.5)
 
-weighted_travel_times.plot(
-    ax=ax,
-    column="total_weighted_time",
-    legend=True,
+# weighted_travel_times.plot(
+#     ax=ax,
+#     column="total_weighted_time",
+#     legend=True,
+#     cmap="viridis",
+#     markersize=0.5,
+#     scheme="user_defined",
+#     classification_kwds={"bins": [1000, 2000, 3000, 4000, 5000]},
+#     legend_kwds={
+#         # "title": "Total vægtet rejsetid (minutter)",
+#         # "bbox_to_anchor": (0.5, 1.05),
+#         # "loc": "lower center",
+#         "fmt": "{:.0f}",
+#         "fontsize": font_size,
+#         "frameon": False,
+#     },
+# )
+# ax.set_axis_off()
+# plt.title("Total vægtet rejsetid (minutter)")
+
+# ax.add_artist(
+#     ScaleBar(
+#         dx=1,
+#         units="m",
+#         dimension="si-length",
+#         length_fraction=0.15,
+#         width_fraction=0.002,
+#         location="lower left",
+#         box_alpha=0,
+#         font_properties={"size": font_size},
+#     )
+# )
+
+# plt.tight_layout()
+# plt.savefig(results_path / "plots/weighted_travel_time_map.png", dpi=300)
+# plt.show()
+
+
+def map_results_user_defined(
+    gdf,
+    column,
+    title,
+    output_fp,
+    bins,
+    study_area_fp="../data/input/study_area.gpkg",
+    font_size=12,
     cmap="viridis",
     markersize=0.5,
-    scheme="user_defined",
-    classification_kwds={"bins": [1000, 2000, 3000, 4000, 5000]},
-    legend_kwds={
-        # "title": "Total vægtet rejsetid (minutter)",
-        # "bbox_to_anchor": (0.5, 1.05),
-        # "loc": "lower center",
-        "fmt": "{:.0f}",
-        "fontsize": font_size,
-        "frameon": False,
-    },
-)
-ax.set_axis_off()
-plt.title("Total vægtet rejsetid (minutter)")
+):
 
-ax.add_artist(
-    ScaleBar(
-        dx=1,
-        units="m",
-        dimension="si-length",
-        length_fraction=0.15,
-        width_fraction=0.002,
-        location="lower left",
-        box_alpha=0,
-        font_properties={"size": font_size},
+    study_area = gpd.read_file(study_area_fp)
+
+    _, ax = plt.subplots(figsize=(15, 10))
+
+    study_area.plot(ax=ax, color="white", edgecolor="black", linewidth=0.5)
+
+    gdf.plot(
+        ax=ax,
+        column=column,
+        legend=True,
+        cmap=cmap,
+        markersize=markersize,
+        scheme="user_defined",
+        classification_kwds={"bins": bins},
+        legend_kwds={
+            # "title": "Total vægtet rejsetid (minutter)",
+            # "bbox_to_anchor": (0.5, 1.05),
+            # "loc": "lower center",
+            "fmt": "{:.0f}",
+            "fontsize": font_size,
+            "frameon": False,
+        },
     )
+    ax.set_axis_off()
+    plt.title(title)
+
+    ax.add_artist(
+        ScaleBar(
+            dx=1,
+            units="m",
+            dimension="si-length",
+            length_fraction=0.15,
+            width_fraction=0.002,
+            location="lower left",
+            box_alpha=0,
+            font_properties={"size": font_size},
+        )
+    )
+
+    plt.tight_layout()
+    plt.savefig(output_fp, dpi=300)
+    plt.show()
+
+
+map_results_user_defined(
+    weighted_travel_times,
+    "total_weighted_time",
+    "Total vægtet rejsetid (minutter)",
+    results_path / "plots/weighted_travel_time_map.png",
+    bins=[1000, 2000, 3000, 4000, 5000],
 )
-
-plt.tight_layout()
-plt.show()
-
 
 # %%
+# compute and plot total travel times
+sum_query = """
+DROP TABLE IF EXISTS  total_travel_times;
+CREATE TABLE total_travel_times AS
+SELECT 
+    source_id, 
+    SUM(duration_min) AS total_duration,
+    SUM(wait_time_dest_min) AS total_wait_time
+FROM (
+    SELECT source_id, duration_min, wait_time_dest_min FROM dentist_1
+    UNION ALL
+    SELECT source_id, duration_min, wait_time_dest_min FROM doctor_1
+    UNION ALL
+    SELECT source_id, duration_min, wait_time_dest_min FROM kindergarten_nursery_1
+    UNION ALL
+    SELECT source_id, duration_min, wait_time_dest_min FROM library_1
+    UNION ALL
+    SELECT source_id, duration_min, wait_time_dest_min FROM pharmacy_1
+    UNION ALL
+    SELECT source_id, duration_min, wait_time_dest_min FROM school_1
+    UNION ALL
+    SELECT source_id, duration_min, wait_time_dest_min FROM sports_facility_1
+    UNION ALL
+    SELECT source_id, duration_min, wait_time_dest_min FROM supermarket_1
+    UNION ALL
+    SELECT source_id, duration_min, wait_time_dest_min FROM train_station_1
+) AS all_data
+GROUP BY source_id;
+ALTER TABLE total_travel_times ADD COLUMN total_time_min DOUBLE;
+UPDATE total_travel_times SET total_time_min = total_duration + total_wait_time;
+"""
+duck_db_con.execute(sum_query)
 
-# TODO: compute total travel time in 2 different ways (total duration for all services, total duration + wait time at destination)
 
+total_travel_times_df = duck_db_con.execute(
+    """
+SELECT tt.source_id, tt.total_duration, tt.total_wait_time, tt.total_time_min, ST_AsWKB(geometry) AS geom_wkb
+FROM total_travel_times tt JOIN dentist_1 s ON tt.source_id = s.source_id
+"""
+).fetchdf()
+
+total_travel_times_df["geometry"] = total_travel_times_df["geom_wkb"].apply(
+    safe_wkb_load
+)
+
+# Drop the WKB helper column
+total_travel_times_df = total_travel_times_df.drop(columns=["geom_wkb"])
+
+total_travel_times_gdf = gpd.GeoDataFrame(
+    total_travel_times_df, geometry="geometry", crs=crs
+)
+
+# %%
+# plot histogram of total travel times
+plot_histogram(
+    total_travel_times_gdf,
+    "total_time_min",
+    "Histogram of Total Travel Times to All Services",
+    "Total Travel Time to All Services (min)",
+    "Frequency",
+    results_path / "plots/total_travel_time_histogram.png",
+)
+
+# %%
+# map of total travel times
+map_results_user_defined(
+    total_travel_times_gdf,
+    "total_time_min",
+    "Total rejsetid til alle servicefunktioner (minutter)",
+    results_path / "plots/total_travel_time_map.png",
+    bins=[
+        200,
+        400,
+        600,
+        800,
+        1000,
+        1200,
+        1400,
+        1600,
+    ],
+)
 
 # %%
 # compute travel time per hex bin
 
 # TODO: HOW TO HANDLE LOCATIONS WITH NO RESULTS?
 
-study_area = gpd.read_file(config_analysis["study_area_fp"])
+# study_area = gpd.read_file(config_analysis["study_area_fp"])
 
 # TODO: load aggregated data from helper script
 # TODO: visualize aggregated travel and wait times on map
