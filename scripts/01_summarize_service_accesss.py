@@ -17,6 +17,8 @@ from matplotlib_scalebar.scalebar import ScaleBar
 from src.helper_functions import (
     highlight_max_traveltime,
     highlight_min_traveltime,
+    plot_histogram,
+    map_results_user_defined,
     create_hex_grid,
     compute_weighted_time,
     export_gdf_to_duckdb_spatial,
@@ -209,40 +211,6 @@ for w in weight_cols:
         engine="pyarrow",
     )
 
-# plt.figure(figsize=(8, 5))
-# plt.hist(
-#     weighted_travel_times["total_weighted_time"].dropna(),
-#     bins=30,
-#     color="skyblue",
-#     edgecolor="black",
-# )
-# plt.xlabel("Total Weighted Travel Time (min)")
-# plt.ylabel("Frequency")
-# plt.title("Histogram of Total Weighted Travel Times")
-# # plt.grid(axis="y", alpha=0.75)
-# sns.despine()
-# plt.tight_layout()
-# plt.savefig(results_path / "plots/weighted_travel_time_histogram.png", dpi=300)
-# plt.show()
-
-
-def plot_histogram(data, column, title, xlabel, ylabel, output_fp, bins=30):
-    plt.figure(figsize=(8, 5))
-    plt.hist(
-        data[column].dropna(),
-        bins=bins,
-        color="skyblue",
-        edgecolor="black",
-    )
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    # plt.grid(axis="y", alpha=0.75)
-    plt.title(title)
-    sns.despine()
-    plt.tight_layout()
-    plt.savefig(output_fp, dpi=300)
-    plt.show()
-
 
 plot_histogram(
     weighted_travel_times,
@@ -254,105 +222,6 @@ plot_histogram(
 )
 
 # # Map of weighted travel times
-# font_size = 12
-# study_area = gpd.read_file("../data/input/study_area.gpkg")
-
-# fig, ax = plt.subplots(figsize=(15, 10))
-
-# study_area.plot(ax=ax, color="white", edgecolor="black", linewidth=0.5)
-
-# weighted_travel_times.plot(
-#     ax=ax,
-#     column="total_weighted_time",
-#     legend=True,
-#     cmap="viridis",
-#     markersize=0.5,
-#     scheme="user_defined",
-#     classification_kwds={"bins": [1000, 2000, 3000, 4000, 5000]},
-#     legend_kwds={
-#         # "title": "Total vægtet rejsetid (minutter)",
-#         # "bbox_to_anchor": (0.5, 1.05),
-#         # "loc": "lower center",
-#         "fmt": "{:.0f}",
-#         "fontsize": font_size,
-#         "frameon": False,
-#     },
-# )
-# ax.set_axis_off()
-# plt.title("Total vægtet rejsetid (minutter)")
-
-# ax.add_artist(
-#     ScaleBar(
-#         dx=1,
-#         units="m",
-#         dimension="si-length",
-#         length_fraction=0.15,
-#         width_fraction=0.002,
-#         location="lower left",
-#         box_alpha=0,
-#         font_properties={"size": font_size},
-#     )
-# )
-
-# plt.tight_layout()
-# plt.savefig(results_path / "plots/weighted_travel_time_map.png", dpi=300)
-# plt.show()
-
-
-def map_results_user_defined(
-    gdf,
-    column,
-    title,
-    output_fp,
-    bins,
-    study_area_fp="../data/input/study_area.gpkg",
-    font_size=12,
-    cmap="viridis",
-    markersize=0.5,
-):
-
-    study_area = gpd.read_file(study_area_fp)
-
-    _, ax = plt.subplots(figsize=(15, 10))
-
-    study_area.plot(ax=ax, color="white", edgecolor="black", linewidth=0.5)
-
-    gdf.plot(
-        ax=ax,
-        column=column,
-        legend=True,
-        cmap=cmap,
-        markersize=markersize,
-        scheme="user_defined",
-        classification_kwds={"bins": bins},
-        legend_kwds={
-            # "title": "Total vægtet rejsetid (minutter)",
-            # "bbox_to_anchor": (0.5, 1.05),
-            # "loc": "lower center",
-            "fmt": "{:.0f}",
-            "fontsize": font_size,
-            "frameon": False,
-        },
-    )
-    ax.set_axis_off()
-    plt.title(title)
-
-    ax.add_artist(
-        ScaleBar(
-            dx=1,
-            units="m",
-            dimension="si-length",
-            length_fraction=0.15,
-            width_fraction=0.002,
-            location="lower left",
-            box_alpha=0,
-            font_properties={"size": font_size},
-        )
-    )
-
-    plt.tight_layout()
-    plt.savefig(output_fp, dpi=300)
-    plt.show()
 
 
 map_results_user_defined(
@@ -445,6 +314,12 @@ map_results_user_defined(
         1600,
     ],
 )
+
+# %%
+# TODO: check table lengths!
+# TODO: index all points by hex_grid
+# TODO: index all points by municipalities
+
 
 # %%
 # compute travel time per hex bin

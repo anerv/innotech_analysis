@@ -31,6 +31,84 @@ from sklearn.metrics import silhouette_score
 import warnings
 from matplotlib.patches import Patch
 
+
+############################# RANDOM PLOTTING FUNCTIONS #############################
+
+
+def map_results_user_defined(
+    gdf,
+    column,
+    title,
+    output_fp,
+    bins,
+    study_area_fp="../data/input/study_area.gpkg",
+    font_size=12,
+    cmap="viridis",
+    markersize=0.5,
+):
+
+    study_area = gpd.read_file(study_area_fp)
+
+    _, ax = plt.subplots(figsize=(15, 10))
+
+    study_area.plot(ax=ax, color="white", edgecolor="black", linewidth=0.5)
+
+    gdf.plot(
+        ax=ax,
+        column=column,
+        legend=True,
+        cmap=cmap,
+        markersize=markersize,
+        scheme="user_defined",
+        classification_kwds={"bins": bins},
+        legend_kwds={
+            # "title": "Total vægtet rejsetid (minutter)",
+            # "bbox_to_anchor": (0.5, 1.05),
+            # "loc": "lower center",
+            "fmt": "{:.0f}",
+            "fontsize": font_size,
+            "frameon": False,
+        },
+    )
+    ax.set_axis_off()
+    plt.title(title)
+
+    ax.add_artist(
+        ScaleBar(
+            dx=1,
+            units="m",
+            dimension="si-length",
+            length_fraction=0.15,
+            width_fraction=0.002,
+            location="lower left",
+            box_alpha=0,
+            font_properties={"size": font_size},
+        )
+    )
+
+    plt.tight_layout()
+    plt.savefig(output_fp, dpi=300)
+    plt.show()
+
+
+def plot_histogram(data, column, title, xlabel, ylabel, output_fp, bins=30):
+    plt.figure(figsize=(8, 5))
+    plt.hist(
+        data[column].dropna(),
+        bins=bins,
+        color="skyblue",
+        edgecolor="black",
+    )
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    # plt.grid(axis="y", alpha=0.75)
+    plt.title(title)
+    sns.despine()
+    plt.tight_layout()
+    plt.savefig(output_fp, dpi=300)
+    plt.show()
+
+
 ############################# CLUSTERING FUNCTIONS #############################
 
 
