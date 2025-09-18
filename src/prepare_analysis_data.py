@@ -12,7 +12,6 @@ from src.helper_functions import (
     create_hex_grid,
 )
 
-
 # Define the path to the config.yml file
 script_path = Path(__file__).resolve()
 root_path = script_path.parent.parent
@@ -48,44 +47,81 @@ services = config_model["services"]
 
 # %%
 
-# TODO: Use config to choose aggregated or non aggregated data?
-# Use when exporting to not overwrite results
+# TODO: select columns from duckdb tables
 # TODO: find ways to drop islands
-
-# TODO: config for how to handle no results
 
 ####### GET DATA ##########
 
 table_names = [s["service_type"] + "_1" for s in services]
 
-random_table = gpd.read_parquet(
-    data_path / "input" / f"{table_names[0]}_otp_geo.parquet"
-)
+random_table = duck_db_con.execute(
+    f"""
+SELECT * FROM {table_names[0]} LIMIT 1
+"""
+).fetchdf()
 
-existing_cols = random_table.columns.tolist()
-
-
-travel_time_columns = [
-    "waitingTime",
-    "walkDistance",
-    "abs_dist",
+# %%
+id_col = "source_id"
+geometry_col = "geometry"
+columns = [
     "duration_min",
     "wait_time_dest_min",
     "total_time_min",
+    "walkDistance",
+    "abs_dist",
     "transfers",
+    # "bus_duration",
+    # "rail_duration",
+    # "walk_duration",
 ]
 
-travel_time_columns.extend([c for c in existing_cols if "_duration" in c])
+columns.extend([c for c in random_table.columns if "_duration" in c])
+columns.extend([id_col, geometry_col])
 
+# %%
+
+# TODO: Use table names and column list to get all data from duckdb
 
 all_travel_times_gdf = combine_columns_from_tables(
-    travel_time_columns,
+    columns,
     duck_db_con,
     table_names,
-    "source_id",
-    "geometry",
+    id_col,
+    geometry_col,
     crs,
 )
+
+# %%
+# table_names = [s["service_type"] + "_1" for s in services]
+
+# random_table = gpd.read_parquet(
+#     data_path / "input" / f"{table_names[0]}_otp_geo.parquet"
+# )
+
+# existing_cols = random_table.columns.tolist()
+
+# # %%
+# travel_time_columns = [
+#     "waitingTime",
+#     "walkDistance",
+#     "abs_dist",
+#     "duration_min",
+#     "wait_time_dest_min",
+#     "total_time_min",
+#     "transfers",
+# ]
+
+# travel_time_columns.extend([c for c in existing_cols if "_duration" in c])
+
+# # %%
+# all_travel_times_gdf = combine_columns_from_tables(
+#     travel_time_columns,
+#     duck_db_con,
+#     table_names,
+#     "source_id",
+#     "geometry",
+#     crs,
+# )
 
 # %%
 

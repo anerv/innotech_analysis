@@ -222,8 +222,6 @@ plot_histogram(
 )
 
 # # Map of weighted travel times
-
-
 map_results_user_defined(
     weighted_travel_times,
     "total_weighted_time",
@@ -234,6 +232,7 @@ map_results_user_defined(
 
 # %%
 # compute and plot total travel times
+# NOTE: Services are hardcoded here - could be improved!
 sum_query = """
 DROP TABLE IF EXISTS  total_travel_times;
 CREATE TABLE total_travel_times AS
@@ -285,7 +284,7 @@ total_travel_times_gdf = gpd.GeoDataFrame(
     total_travel_times_df, geometry="geometry", crs=crs
 )
 
-# %%
+
 # plot histogram of total travel times
 plot_histogram(
     total_travel_times_gdf,
@@ -296,7 +295,6 @@ plot_histogram(
     results_path / "plots/total_travel_time_histogram.png",
 )
 
-# %%
 # map of total travel times
 map_results_user_defined(
     total_travel_times_gdf,
@@ -316,150 +314,87 @@ map_results_user_defined(
 )
 
 # %%
-# TODO: check table lengths!
-# TODO: index all points by hex_grid
-# TODO: index all points by municipalities
+
+# Aggregate travel time geometries to hex grid and municipalities
+
+geoms = duck_db_con.execute(
+    "SELECT source_id, ST_AsWKB(geometry) AS geom_wkb FROM dentist_1"
+).fetchdf()
+
+geoms["geometry"] = geoms["geom_wkb"].apply(safe_wkb_load)
+
+geoms.drop(columns=["geom_wkb"], inplace=True)
+geoms_gdf = gpd.GeoDataFrame(geoms, geometry="geometry", crs=crs)
 
 
-# %%
-# compute travel time per hex bin
+study_area = gpd.read_file(config_analysis["study_area_fp"])
 
-# TODO: HOW TO HANDLE LOCATIONS WITH NO RESULTS?
-
-# study_area = gpd.read_file(config_analysis["study_area_fp"])
-
-# TODO: load aggregated data from helper script
-# TODO: visualize aggregated travel and wait times on map
-# TODO: also include only walk, modes, no solutions, etc
+hex_grid = create_hex_grid(study_area, 6, crs, 300)
 
 
-# aggregation_type = "ave_travel_times"
+municipalities = gpd.read_parquet(config_analysis["municipalities_fp"])
 
-# hex_grid = create_hex_grid(study_area, 6, crs, 200)
-
-# hex_travel_times = gpd.sjoin(
-#     hex_grid,
-#     combined_gdf,
-#     how="inner",
-#     predicate="intersects",
-#     rsuffix="travel",
-#     lsuffix="hex",
-# )
-
-# hex_id_col = "grid_id"
-
-# cols_to_average = [
-#     col for col in hex_travel_times.columns if col.startswith("total_time_min")
-# ]
-# cols_to_average.extend([total_col])
-
-
-# hex_avg_travel_times = (
-#     hex_travel_times.groupby(hex_id_col)[cols_to_average].mean().reset_index()
-# )
-
-# hex_avg_travel_times_gdf = hex_grid.merge(
-#     hex_avg_travel_times, on="grid_id", how="left"
-# )
-
-# hex_avg_travel_times_gdf.to_parquet(
-#     results_path / f"data/hex_{aggregation_type}_otp.parquet",
-# )
-
-# %%
-# # count no results per hex bin
-# cols_to_include = [
-#     col for col in hex_travel_times.columns if col.startswith("total_time_min")
-# ]
-# nan_counts_per_hex = (
-#     hex_travel_times.groupby(hex_id_col)[cols_to_include]
-#     .apply(lambda group: group.isna().sum(), include_groups=False)
-#     .reset_index()
-# )
-
-# nan_counts_per_hex.columns = [hex_id_col] + [
-#     item.split("total_time_min_")[1] + "_nan_count"
-#     for item in nan_counts_per_hex.columns[1:]
-# ]
-
-# sum_cols = nan_counts_per_hex.columns[1:]
-# nan_counts_per_hex["total_no_results"] = nan_counts_per_hex[sum_cols].sum(axis=1)
-
-# nan_counts_per_hex_gdf = hex_grid.merge(nan_counts_per_hex, on=hex_id_col, how="left")
-
-# nan_counts_per_hex_gdf.to_parquet(
-#     results_path / "data/hex_nan_counts_per_service.parquet"
-# )
-
+muni_id_col = config_model["study_area_config"]["municipalities"]["id_column"]
+municipalities = municipalities[["geometry", muni_id_col]]
 
 # %%
 
-#  Municipality level aggregation
+joined_hex = geoms_gdf.sjoin(
+    hex_grid,
+    how="left",
+    predicate="intersects",
+)
 
-# TODO: HOW TO HANDLE LOCATIONS WITH NO RESULTS?
-
-# TODO: load aggregated data from helper script
-# TODO: visualize aggregated travel and wait times on map
-# TODO: also include only walk, modes, no solutions, etc
-
-# municipalities = gpd.read_parquet(config_analysis["municipalities_fp"])
-
-# muni_id_col = config_model["study_area_config"]["municipalities"]["id_column"]
-# municipalities = municipalities[["geometry", muni_id_col]]
-
-# municipal_travel_times = gpd.sjoin(
-#     municipalities,
-#     combined_gdf,
-#     how="inner",
-#     predicate="intersects",
-#     rsuffix="travel",
-#     lsuffix="region",
-# )
-
-# cols_to_average = [
-#     col for col in municipal_travel_times.columns if col.startswith("total_time_min")
-# ]
-# cols_to_average.extend([total_col])
-
-# municipal_avg_travel_times = (
-#     municipal_travel_times.groupby(muni_id_col)[cols_to_average].mean().reset_index()
-# )
-
-# municipal_avg_travel_times_gdf = municipalities.merge(
-#     municipal_avg_travel_times, on=muni_id_col, how="left"
-# )
-
-# municipal_avg_travel_times_gdf.to_parquet(
-#     results_path / f"data/municipal_{aggregation_type}_otp.parquet",
-# )
-
-# # %%
-# # count no results per municipality
-# cols_to_average = [
-#     col for col in municipal_travel_times.columns if col.startswith("total_time_min")
-# ]
-
-# nan_counts_per_muni = (
-#     municipal_travel_times.groupby(muni_id_col)[cols_to_average]
-#     .apply(lambda group: group.isna().sum(), include_groups=False)
-#     .reset_index()
-# )
+joined_hex2 = joined_hex[joined_hex.grid_id.isna()][
+    ["source_id", "geometry"]
+].sjoin_nearest(hex_grid, how="left", max_distance=300, distance_col="dist_to_hex")
 
 
-# nan_counts_per_muni.columns = [muni_id_col] + [
-#     item.split("total_time_min_")[1] + "_nan_count"
-#     for item in nan_counts_per_muni.columns[1:]
-# ]
+joined_hex2.drop(columns=["dist_to_hex"], inplace=True)
+joined_hex = pd.concat([joined_hex[~joined_hex.grid_id.isna()], joined_hex2])
+joined_hex.drop(columns=["index_right"], inplace=True)
 
-# sum_cols = nan_counts_per_muni.columns[1:]
-# nan_counts_per_muni["total_no_results"] = nan_counts_per_muni[sum_cols].sum(axis=1)
 
-# nan_counts_per_muni_gdf = municipalities[[muni_id_col, "geometry"]].merge(
-#     nan_counts_per_muni, on=muni_id_col, how="left"
-# )
+assert len(joined_hex) == len(geoms_gdf)
+assert joined_hex["grid_id"].isna().sum() == 0
+assert len(joined_hex["source_id"].unique()) == len(geoms_gdf)
 
-# # nan_counts_per_muni_gdf.to_parquet(
-# #     results_path / "data/muni_nan_counts_per_service.parquet"
-# # )
+# %%
+joined_muni = geoms_gdf.sjoin(municipalities, how="left", predicate="intersects")
 
+joined_muni.drop_duplicates(subset=["source_id"], inplace=True)
+
+joined_muni2 = joined_muni[joined_muni[muni_id_col].isna()][
+    ["source_id", "geometry"]
+].sjoin_nearest(
+    municipalities, how="left", max_distance=300, distance_col="dist_to_muni"
+)
+
+joined_muni2.drop(columns=["dist_to_muni"], inplace=True)
+
+joined_muni = pd.concat([joined_muni[~joined_muni[muni_id_col].isna()], joined_muni2])
+
+joined_muni.drop(columns=["index_right"], inplace=True)
+
+assert len(joined_muni) == len(geoms_gdf)
+assert joined_muni[muni_id_col].isna().sum() == 0
+assert len(joined_muni["source_id"].unique()) == len(geoms_gdf)
+
+# %%
+# combine hex and muni gdfs
+joined_hex_muni = joined_hex.merge(
+    joined_muni[[muni_id_col, "source_id"]], on="source_id", how="left"
+)
+
+assert len(joined_hex_muni) == len(geoms_gdf)
+assert joined_hex_muni[muni_id_col].isna().sum() == 0
+assert joined_hex_muni["grid_id"].isna().sum() == 0
+assert len(joined_hex_muni["source_id"].unique()) == len(geoms_gdf)
+
+# %%
+# export to duckdb
+export_gdf_to_duckdb_spatial(joined_hex_muni, duck_db_con, "source_hex_muni")
+
+tables_df = duck_db_con.sql("SELECT table_name FROM duckdb_tables;").df()
+assert "source_hex_muni" in tables_df["table_name"].values
 # %%
