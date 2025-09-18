@@ -20,4 +20,4 @@ drop_islands: true # Whether to drop islands in the analysis (will often have no
 max_wait_time: # 120 # Maximum waiting time in seconds, leave empty to disable
 max_duration: # 480 # Maximum travel duration in seconds, leave empty to disable
 
-islands_fp : "../data/input/islands.gpkg" # Path to the islands file, used if drop_islands is true
+islands_fp : "../data/input/islands.parquet" # Path to the islands file, used if drop_islands is true
