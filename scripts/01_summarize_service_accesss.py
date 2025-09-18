@@ -401,3 +401,4 @@ assert "source_hex_muni" in tables_df["table_name"].values
 export_gdf_to_duckdb_spatial(hex_grid, duck_db_con, "hex_grid")
 export_gdf_to_duckdb_spatial(municipalities, duck_db_con, "municipalities")
 # %%
+exec("scr/prepare_analysis_data.py")

@@ -45,10 +45,6 @@ duck_db_con.execute("LOAD spatial;")
 services = config_model["services"]
 
 # %%
-
-# TODO: find ways to drop islands
-
-# %%
 ####### GET DATA ##########
 
 table_names = [s["service_type"] + "_1" for s in services]
@@ -214,14 +210,5 @@ duck_db_con.execute(query)
 
 # muni_travel_times_gdf.to_parquet("muni_travel_times.parquet")
 
-
-# %%
-if drop_islands:
-
-    # TODO: prepare islands file
-    # explode boundaries
-    # manually select islands
-
-    islands = gpd.read_file(islands_fp)
 
 # %%
