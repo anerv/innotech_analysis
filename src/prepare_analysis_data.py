@@ -8,8 +8,7 @@ import yaml
 from pathlib import Path
 
 from src.helper_functions import (
-    combine_columns_from_tables,
-    create_hex_grid,
+    safe_wkb_load,
 )
 
 # Define the path to the config.yml file
@@ -47,9 +46,9 @@ services = config_model["services"]
 
 # %%
 
-# TODO: select columns from duckdb tables
 # TODO: find ways to drop islands
 
+# %%
 ####### GET DATA ##########
 
 table_names = [s["service_type"] + "_1" for s in services]
@@ -60,7 +59,6 @@ SELECT * FROM {table_names[0]} LIMIT 1
 """
 ).fetchdf()
 
-# %%
 id_col = "source_id"
 geometry_col = "geometry"
 columns = [
@@ -70,61 +68,154 @@ columns = [
     "walkDistance",
     "abs_dist",
     "transfers",
-    # "bus_duration",
-    # "rail_duration",
-    # "walk_duration",
 ]
 
 columns.extend([c for c in random_table.columns if "_duration" in c])
-columns.extend([id_col, geometry_col])
+
+first_col = columns[0]
+
+# %%
+output_table = "hex_travel_times"
+geom_id_col = "grid_id"
+geometry_table_name = "hex_grid"
+
+# Build CTEs for travel time tables (join with source_hex to get geom_id_col)
+ctes = []
+for table in table_names:
+    avg_expressions = [f"AVG({col}) AS {col}_{table}_ave" for col in columns]
+    null_count_expr = f"SUM(CASE WHEN {first_col} IS NULL THEN 1 ELSE 0 END) AS no_connection_count_{table}"
+    sum_observations_expr = f"COUNT(*) AS total_observations_{table}"
+
+    cte = f"""{table}_agg AS (
+        SELECT sh.{geom_id_col},
+               {", ".join(avg_expressions)},
+               {null_count_expr},
+               {sum_observations_expr}
+        FROM {table} t
+        JOIN source_hex_muni sh ON t.{id_col} = sh.{id_col}
+        GROUP BY sh.{geom_id_col}
+    )"""
+    ctes.append(cte)
+
+# Geometry CTE from geometry table
+geom_cte = f"""geom AS (
+    SELECT {geom_id_col}, ST_AsWKB({geometry_col}) AS geom_wkb
+    FROM {geometry_table_name}
+)"""
+ctes.insert(0, geom_cte)
+
+# Build SELECT clause
+select_cols = [
+    f"geom.{geom_id_col}",
+    f"geom.geom_wkb",
+]
+for table in table_names:
+    for col in columns:
+        select_cols.append(f"{table}_agg.{col}_{table}_ave")
+    select_cols.append(f"{table}_agg.no_connection_count_{table}")
+    select_cols.append(f"{table}_agg.total_observations_{table}")
+
+# Final query with CREATE TABLE
+query = f"""
+CREATE OR REPLACE TABLE {output_table} AS
+WITH
+{",\n".join(ctes)}
+SELECT
+    {", ".join(select_cols)}
+FROM geom
+{" ".join([f"LEFT JOIN {table}_agg USING ({geom_id_col})" for table in table_names])};
+"""
+
+duck_db_con.execute(query)
+
+
+# %%
+# hex_travel_times = duck_db_con.execute(f"SELECT * FROM {output_table}").fetchdf()
+
+# hex_travel_times["geometry"] = hex_travel_times["geom_wkb"].apply(safe_wkb_load)
+
+# # Drop the WKB helper column
+# hex_travel_times = hex_travel_times.drop(columns=["geom_wkb"])
+
+# hex_travel_times_gdf = gpd.GeoDataFrame(hex_travel_times, geometry="geometry", crs=crs)
+
+# hex_travel_times_gdf.to_parquet("hex_travel_times.parquet")
 
 # %%
 
-# TODO: Use table names and column list to get all data from duckdb
+# REPEAT FOR MUNICIPALITIES
 
-all_travel_times_gdf = combine_columns_from_tables(
-    columns,
-    duck_db_con,
-    table_names,
-    id_col,
-    geometry_col,
-    crs,
-)
+output_table = "municipal_travel_times"
+geom_id_col = config_model["study_area_config"]["municipalities"]["id_column"]
+geometry_table_name = "municipalities"
+
+# Build CTEs for travel time tables (join with source_hex to get geom_id_col)
+ctes = []
+for table in table_names:
+    avg_expressions = [f"AVG({col}) AS {col}_{table}_ave" for col in columns]
+    null_count_expr = f"SUM(CASE WHEN {first_col} IS NULL THEN 1 ELSE 0 END) AS no_connection_count_{table}"
+    sum_observations_expr = f"COUNT(*) AS total_observations_{table}"
+
+    cte = f"""{table}_agg AS (
+        SELECT sh.{geom_id_col},
+               {", ".join(avg_expressions)},
+               {null_count_expr},
+               {sum_observations_expr}
+        FROM {table} t
+        JOIN source_hex_muni sh ON t.{id_col} = sh.{id_col}
+        GROUP BY sh.{geom_id_col}
+    )"""
+    ctes.append(cte)
+
+# Geometry CTE from geometry table
+geom_cte = f"""geom AS (
+    SELECT {geom_id_col}, ST_AsWKB({geometry_col}) AS geom_wkb
+    FROM {geometry_table_name}
+)"""
+ctes.insert(0, geom_cte)
+
+# Build SELECT clause
+select_cols = [
+    f"geom.{geom_id_col}",
+    f"geom.geom_wkb",
+]
+for table in table_names:
+    for col in columns:
+        select_cols.append(f"{table}_agg.{col}_{table}_ave")
+    select_cols.append(f"{table}_agg.no_connection_count_{table}")
+    select_cols.append(f"{table}_agg.total_observations_{table}")
+
+# Final query with CREATE TABLE
+query = f"""
+CREATE OR REPLACE TABLE {output_table} AS
+WITH
+{",\n".join(ctes)}
+SELECT
+    {", ".join(select_cols)}
+FROM geom
+{" ".join([f"LEFT JOIN {table}_agg USING ({geom_id_col})" for table in table_names])};
+"""
+
+duck_db_con.execute(query)
+
 
 # %%
-# table_names = [s["service_type"] + "_1" for s in services]
 
-# random_table = gpd.read_parquet(
-#     data_path / "input" / f"{table_names[0]}_otp_geo.parquet"
+# muni_travel_times = duck_db_con.execute(f"SELECT * FROM {output_table}").fetchdf()
+
+# muni_travel_times["geometry"] = muni_travel_times["geom_wkb"].apply(safe_wkb_load)
+
+# # Drop the WKB helper column
+# muni_travel_times = muni_travel_times.drop(columns=["geom_wkb"])
+
+# muni_travel_times_gdf = gpd.GeoDataFrame(
+#     muni_travel_times, geometry="geometry", crs=crs
 # )
 
-# existing_cols = random_table.columns.tolist()
+# muni_travel_times_gdf.to_parquet("muni_travel_times.parquet")
 
-# # %%
-# travel_time_columns = [
-#     "waitingTime",
-#     "walkDistance",
-#     "abs_dist",
-#     "duration_min",
-#     "wait_time_dest_min",
-#     "total_time_min",
-#     "transfers",
-# ]
-
-# travel_time_columns.extend([c for c in existing_cols if "_duration" in c])
-
-# # %%
-# all_travel_times_gdf = combine_columns_from_tables(
-#     travel_time_columns,
-#     duck_db_con,
-#     table_names,
-#     "source_id",
-#     "geometry",
-#     crs,
-# )
 
 # %%
-
 if drop_islands:
 
     # TODO: prepare islands file
@@ -134,73 +225,3 @@ if drop_islands:
     islands = gpd.read_file(islands_fp)
 
 # %%
-# Aggregate by hex grid
-
-# Create hex grid for the study area
-study_area = gpd.read_file(config_analysis["study_area_fp"])
-
-hex_grid = create_hex_grid(study_area, 7, crs, 200)
-
-hex_travel_times = gpd.sjoin(
-    hex_grid,
-    all_travel_times_gdf,
-    how="inner",
-    predicate="intersects",
-    rsuffix="travel",
-    lsuffix="hex",
-)
-
-hex_travel_times.drop(columns=["index_travel"], inplace=True)
-
-hex_id_col = "grid_id"
-
-cols_to_average = [
-    col
-    for col in hex_travel_times.columns
-    if col.startswith("wait_time_dest_min")
-    or col.startswith("duration_min")
-    or col.startswith("walkDistance")
-    or col.startswith("abs_dist")
-    or col.startswith("total_time_min")
-]
-
-hex_avg_travel_times = (
-    hex_travel_times.groupby(hex_id_col)[cols_to_average].mean().reset_index()
-)
-
-hex_avg_travel_times_gdf = hex_grid.merge(
-    hex_avg_travel_times, on="grid_id", how="left"
-)
-
-# %%
-# drop hexagons with no results in them
-hex_avg_travel_times_gdf.dropna(subset=["abs_dist_doctor_1"], inplace=True)
-
-# %%
-
-# COUNT NO RESULTS FOR EACH DESTINATION IN EACH HEXAGON
-
-cols_to_include = [
-    col for col in hex_travel_times.columns if col.startswith("total_time_min")
-]
-nan_counts_per_hex = (
-    hex_travel_times.groupby(hex_id_col)[cols_to_include]
-    .apply(lambda group: group.isna().sum(), include_groups=False)
-    .reset_index()
-)
-
-nan_counts_per_hex.columns = [hex_id_col] + [
-    item.split("total_time_min_")[1] + "_nan_count"
-    for item in nan_counts_per_hex.columns[1:]
-]
-
-sum_cols = nan_counts_per_hex.columns[1:]
-nan_counts_per_hex["total_no_results"] = nan_counts_per_hex[sum_cols].sum(axis=1)
-
-hex_avg_travel_times_gdf = hex_avg_travel_times_gdf.merge(
-    nan_counts_per_hex, on=hex_id_col, how="left"
-)
-
-# %%
-
-analysis_gdf = hex_avg_travel_times_gdf  # all_travel_times_gdf.copy()
