@@ -329,7 +329,7 @@ geoms_gdf = gpd.GeoDataFrame(geoms, geometry="geometry", crs=crs)
 
 study_area = gpd.read_file(config_analysis["study_area_fp"])
 
-hex_grid = create_hex_grid(study_area, 6, crs, 300)
+hex_grid = create_hex_grid(study_area, 7, crs, 300)
 
 
 municipalities = gpd.read_parquet(config_analysis["municipalities_fp"])
@@ -397,4 +397,7 @@ export_gdf_to_duckdb_spatial(joined_hex_muni, duck_db_con, "source_hex_muni")
 
 tables_df = duck_db_con.sql("SELECT table_name FROM duckdb_tables;").df()
 assert "source_hex_muni" in tables_df["table_name"].values
+# %%
+export_gdf_to_duckdb_spatial(hex_grid, duck_db_con, "hex_grid")
+export_gdf_to_duckdb_spatial(municipalities, duck_db_con, "municipalities")
 # %%
