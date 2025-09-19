@@ -50,25 +50,6 @@ exec(open(root_path / "src" / "read_analysis_data.py").read())
 
 analysis_gdf = hex_travel_times_gdf
 
-# %%
-analysis_gdf["total_waiting_time"] = analysis_gdf[
-    [col for col in analysis_gdf.columns if col.startswith("wait_time_dest_min")]
-].sum(axis=1)
-
-analysis_gdf["total_travel_time"] = analysis_gdf[
-    [col for col in analysis_gdf.columns if col.startswith("duration_min")]
-].sum(axis=1)
-
-analysis_gdf["total_time"] = analysis_gdf[
-    [
-        col
-        for col in analysis_gdf.columns
-        if col.startswith("wait_time_dest_min") or col.startswith("duration_min")
-    ]
-].sum(axis=1)
-
-# %%
-
 analysis_gdf.describe()
 
 # %%
@@ -100,7 +81,12 @@ for service_dict in services:
     )
 
 # %%
-travel_time_columns = ["duration_min", "wait_time_dest_min", "no_connection_count"]
+travel_time_columns = [
+    "duration_min",
+    "wait_time_dest_min",
+    "total_time_min",
+    "no_connection_count",
+]
 for col in travel_time_columns:
     corr_cols = [c for c in analysis_gdf.columns if col in c]
     display(
