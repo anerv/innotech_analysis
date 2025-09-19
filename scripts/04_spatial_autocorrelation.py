@@ -1,3 +1,5 @@
+# %%
+
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -12,7 +14,7 @@ from src.helper_functions import (
 
 import duckdb
 
-
+# %%
 # Define the path to the config.yml file
 script_path = Path(__file__).resolve()
 root_path = script_path.parent.parent
@@ -26,9 +28,6 @@ with open(config_analysis_path, "r") as file:
     config_analysis = yaml.safe_load(file)
 
     crs = config_analysis["crs"]
-    max_wait_time = config_analysis.get("max_wait_time", None)
-    max_duration = config_analysis.get("max_duration", None)
-    drop_islands = config_analysis.get("drop_islands", False)
 
 with open(config_model_path, "r") as file:
     config_model = yaml.safe_load(file)
