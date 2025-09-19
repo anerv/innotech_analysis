@@ -42,13 +42,15 @@ duck_db_con.execute("LOAD spatial;")
 services = config_model["services"]
 
 # %%
-# TODO: execute prepare_analysis_data.py in folder src to create the analysis_gdf
-
+exec(open(root_path / "src" / "read_analysis_data.py").read())
 
 # %%
 #### EXAMINE CORRELATION BETWEEN VARIABLES ####
 ###############################################
 
+analysis_gdf = hex_travel_times_gdf
+
+# %%
 analysis_gdf["total_waiting_time"] = analysis_gdf[
     [col for col in analysis_gdf.columns if col.startswith("wait_time_dest_min")]
 ].sum(axis=1)
@@ -58,7 +60,11 @@ analysis_gdf["total_travel_time"] = analysis_gdf[
 ].sum(axis=1)
 
 analysis_gdf["total_time"] = analysis_gdf[
-    [col for col in analysis_gdf.columns if col.startswith("total_time_min")]
+    [
+        col
+        for col in analysis_gdf.columns
+        if col.startswith("wait_time_dest_min") or col.startswith("duration_min")
+    ]
 ].sum(axis=1)
 
 # %%
@@ -69,7 +75,7 @@ analysis_gdf.describe()
 corr_columns = [
     c for c in analysis_gdf.columns if c not in ["source_id", "geometry", "grid_id"]
 ]
-
+# %%
 analysis_gdf[corr_columns].corr().round(2).to_csv(
     results_path / "data/travel_time_correlations.csv", index=True
 )
@@ -93,6 +99,8 @@ for service_dict in services:
         .style.background_gradient(cmap="RdBu_r", vmin=-1, vmax=1)
     )
 
+# %%
+travel_time_columns = ["duration_min", "wait_time_dest_min", "no_connection_count"]
 for col in travel_time_columns:
     corr_cols = [c for c in analysis_gdf.columns if col in c]
     display(
