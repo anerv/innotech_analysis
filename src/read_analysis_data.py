@@ -54,13 +54,12 @@ hex_travel_times_gdf = gpd.GeoDataFrame(hex_travel_times, geometry="geometry", c
 
 # %%
 # Select columns
-keep_values = [s["service_type"] for s in services]
 keep_values = [
     "duration_min",
     "wait_time_dest_min",
     "abs_dist",
     "no_connection_count",
-] + keep_values
+]
 keep_columns = [
     c for c in hex_travel_times_gdf.columns if any(k in c for k in keep_values)
 ]
@@ -90,4 +89,7 @@ if drop_islands:
     hex_travel_times_gdf = hex_travel_times_gdf[
         ~hex_travel_times_gdf["grid_id"].isin(intersection["grid_id"])
     ]
+
+
+print("Analysis data read successfully, ready as hex_travel_times_gdf")
 # %%
