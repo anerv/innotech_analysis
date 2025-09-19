@@ -49,6 +49,8 @@ with open(config_analysis_path, "r") as file:
     crs = config_analysis["crs"]
 
     service_weights = config_analysis["service_weights"]
+    max_wait_time = config_analysis.get("max_wait_time", None)
+    max_duration = config_analysis.get("max_duration", None)
 
 
 with open(config_model_path, "r") as file:
@@ -116,6 +118,18 @@ for service in services:
         print(
             f"Average wait time at destination for {dataset}: {ave_wait_time:.2f} minutes"
         )
+
+        if max_wait_time is not None:
+            gdf.loc[
+                gdf["wait_time_dest_min"] >= max_wait_time,
+                ["duration_min", "wait_time_dest_min", "total_time_min"],
+            ] = None
+
+        if max_duration is not None:
+            gdf.loc[
+                gdf["duration_min"] >= max_duration,
+                ["duration_min", "wait_time_dest_min", "total_time_min"],
+            ] = None
 
         export_gdf_to_duckdb_spatial(gdf, duck_db_con, dataset)
 
@@ -193,6 +207,7 @@ styled_table.to_html(
 )
 
 styled_table
+
 
 # %%
 # Compute weighted travel times based on service importance
@@ -401,4 +416,3 @@ assert "source_hex_muni" in tables_df["table_name"].values
 export_gdf_to_duckdb_spatial(hex_grid, duck_db_con, "hex_grid")
 export_gdf_to_duckdb_spatial(municipalities, duck_db_con, "municipalities")
 # %%
-exec("scr/prepare_analysis_data.py")
