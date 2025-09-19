@@ -1,3 +1,5 @@
+# %%
+
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -7,8 +9,6 @@ import yaml
 from pathlib import Path
 
 from src.helper_functions import (
-    combine_columns_from_tables,
-    create_hex_grid,
     plot_silhouette_scores,
     find_k_elbow_method,
     test_kmeans_with_different_seeds,
@@ -21,7 +21,7 @@ from src.helper_functions import (
 
 import duckdb
 
-
+# %%
 # Define the path to the config.yml file
 script_path = Path(__file__).resolve()
 root_path = script_path.parent.parent
@@ -54,7 +54,10 @@ duck_db_con.execute("LOAD spatial;")
 services = config_model["services"]
 
 # %%
+exec(open(root_path / "src" / "read_analysis_data.py").read())
 
+analysis_gdf = hex_travel_times_gdf
+# %%
 
 #################### CLUSTERING ####################
 ###################################################
@@ -66,14 +69,14 @@ cluster_cols = [
         for substring in [
             # "abs_dist",
             # "walkDistance",
-            "duration_min",
-            "wait_time_dest",
-            "nan_count",
+            # "duration_min",
+            # "wait_time_dest",
+            "total_time_min",
+            "no_connection_count",
         ]
     )
 ]
 
-# TODO: HOW TO HANDLE NAN VALUES?
 
 kmeans_data = analysis_gdf.copy()
 kmeans_data.dropna(subset=cluster_cols, inplace=True)
@@ -95,8 +98,9 @@ plot_silhouette_scores(
     scaled_data, k_values=range(6, 12), iterations=10, sample_size=None, global_seed=42
 )
 
+# %%
 # NOTE: DEFINE K HERE
-k = 8
+k = 6
 
 # %%
 ### Test effect of different seed points
