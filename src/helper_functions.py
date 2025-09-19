@@ -548,7 +548,9 @@ def compare_clusterings(labels_dict, seeds):
             seed1 = seeds[i]
             seed2 = seeds[j]
             ari = adjusted_rand_score(labels_dict[seed1], labels_dict[seed2])
-            print(f"ARI between seed {seed1} and seed {seed2}: {ari:.2f}")
+            print(
+                f"Adjusted Rand Score between seed {seed1} and seed {seed2}: {ari:.2f}"
+            )
 
 
 # ########################### DUCKDB FUNCTIONS ###########################
