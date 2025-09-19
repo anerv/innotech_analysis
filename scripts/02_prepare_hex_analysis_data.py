@@ -76,13 +76,12 @@ ctes = []
 for table in table_names:
     avg_expressions = [f"AVG({col}) AS {col}_{table}_ave" for col in columns]
     null_count_expr = f"SUM(CASE WHEN {first_col} IS NULL THEN 1 ELSE 0 END) AS no_connection_count_{table}"
-    sum_observations_expr = f"COUNT(*) AS total_observations_{table}"
+    # sum_observations_expr = f"COUNT(*) AS total_observations_{table}"
 
     cte = f"""{table}_agg AS (
         SELECT sh.{geom_id_col},
                {", ".join(avg_expressions)},
-               {null_count_expr},
-               {sum_observations_expr}
+               {null_count_expr}
         FROM {table} t
         JOIN source_hex_muni sh ON t.{id_col} = sh.{id_col}
         GROUP BY sh.{geom_id_col}
@@ -96,6 +95,14 @@ geom_cte = f"""geom AS (
 )"""
 ctes.insert(0, geom_cte)
 
+count_cte = f"""obs_count AS (
+    SELECT sh.{geom_id_col}, COUNT(*) AS total_observations
+    FROM {table_names[0]} t
+    JOIN source_hex_muni sh ON t.{id_col} = sh.{id_col}
+    GROUP BY sh.{geom_id_col}
+)"""
+ctes.append(count_cte)
+
 # Build SELECT clause
 select_cols = [
     f"geom.{geom_id_col}",
@@ -105,7 +112,9 @@ for table in table_names:
     for col in columns:
         select_cols.append(f"{table}_agg.{col}_{table}_ave")
     select_cols.append(f"{table}_agg.no_connection_count_{table}")
-    select_cols.append(f"{table}_agg.total_observations_{table}")
+    # select_cols.append(f"{table}_agg.total_observations_{table}")
+
+select_cols.append("obs_count.total_observations")
 
 # Final query with CREATE TABLE
 query = f"""
@@ -115,21 +124,21 @@ WITH
 SELECT
     {", ".join(select_cols)}
 FROM geom
-{" ".join([f"LEFT JOIN {table}_agg USING ({geom_id_col})" for table in table_names])};
+{" ".join([f"LEFT JOIN {table}_agg USING ({geom_id_col})" for table in table_names])}
+LEFT JOIN obs_count USING ({geom_id_col});
 """
-
 duck_db_con.execute(query)
 
 
 # %%
-# hex_travel_times = duck_db_con.execute(f"SELECT * FROM {output_table}").fetchdf()
+hex_travel_times = duck_db_con.execute(f"SELECT * FROM {output_table}").fetchdf()
 
-# hex_travel_times["geometry"] = hex_travel_times["geom_wkb"].apply(safe_wkb_load)
+hex_travel_times["geometry"] = hex_travel_times["geom_wkb"].apply(safe_wkb_load)
 
-# # Drop the WKB helper column
-# hex_travel_times = hex_travel_times.drop(columns=["geom_wkb"])
+# Drop the WKB helper column
+hex_travel_times = hex_travel_times.drop(columns=["geom_wkb"])
 
-# hex_travel_times_gdf = gpd.GeoDataFrame(hex_travel_times, geometry="geometry", crs=crs)
+hex_travel_times_gdf = gpd.GeoDataFrame(hex_travel_times, geometry="geometry", crs=crs)
 
 # hex_travel_times_gdf.to_parquet("hex_travel_times.parquet")
 
@@ -146,13 +155,11 @@ ctes = []
 for table in table_names:
     avg_expressions = [f"AVG({col}) AS {col}_{table}_ave" for col in columns]
     null_count_expr = f"SUM(CASE WHEN {first_col} IS NULL THEN 1 ELSE 0 END) AS no_connection_count_{table}"
-    sum_observations_expr = f"COUNT(*) AS total_observations_{table}"
 
     cte = f"""{table}_agg AS (
         SELECT sh.{geom_id_col},
                {", ".join(avg_expressions)},
                {null_count_expr},
-               {sum_observations_expr}
         FROM {table} t
         JOIN source_hex_muni sh ON t.{id_col} = sh.{id_col}
         GROUP BY sh.{geom_id_col}
@@ -166,6 +173,14 @@ geom_cte = f"""geom AS (
 )"""
 ctes.insert(0, geom_cte)
 
+count_cte = f"""obs_count AS (
+    SELECT sh.{geom_id_col}, COUNT(*) AS total_observations
+    FROM {table_names[0]} t
+    JOIN source_hex_muni sh ON t.{id_col} = sh.{id_col}
+    GROUP BY sh.{geom_id_col}
+)"""
+ctes.append(count_cte)
+
 # Build SELECT clause
 select_cols = [
     f"geom.{geom_id_col}",
@@ -175,7 +190,8 @@ for table in table_names:
     for col in columns:
         select_cols.append(f"{table}_agg.{col}_{table}_ave")
     select_cols.append(f"{table}_agg.no_connection_count_{table}")
-    select_cols.append(f"{table}_agg.total_observations_{table}")
+
+select_cols.append("obs_count.total_observations")
 
 # Final query with CREATE TABLE
 query = f"""
@@ -185,9 +201,9 @@ WITH
 SELECT
     {", ".join(select_cols)}
 FROM geom
-{" ".join([f"LEFT JOIN {table}_agg USING ({geom_id_col})" for table in table_names])};
+{" ".join([f"LEFT JOIN {table}_agg USING ({geom_id_col})" for table in table_names])}
+LEFT JOIN obs_count USING ({geom_id_col});
 """
-
 duck_db_con.execute(query)
 
 
