@@ -77,6 +77,9 @@ cluster_cols = [
     )
 ]
 
+print("Clustering on columns: \n")
+for c in cluster_cols:
+    print(c)
 
 kmeans_data = analysis_gdf.copy()
 kmeans_data.dropna(subset=cluster_cols, inplace=True)
