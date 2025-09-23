@@ -6,7 +6,7 @@ cd innotech_analysis
 ````
 
 ````bash
-conda create -n innotech_analysis geopandas pyyaml pyarrow contextily scikit-learn h3-py seaborn python-duckdb ipykernel 
+conda create -n innotech_analysis geopandas pyyaml pyarrow contextily scikit-learn h3-py seaborn pysal python-duckdb ipykernel 
 ````
 
 
