@@ -5,6 +5,7 @@ import pandas as pd
 import geopandas as gpd
 import yaml
 from pathlib import Path
+
 from src.helper_functions import (
     combine_columns_from_tables,
     create_hex_grid,
@@ -13,6 +14,7 @@ from matplotlib.colors import ListedColormap
 import duckdb
 import seaborn as sns
 import matplotlib.pyplot as plt
+
 from pysal.explore import esda
 from pysal.lib import weights
 from splot.esda import lisa_cluster
@@ -475,18 +477,29 @@ def plot_significant_lisa_clusters_all(
 # TODO: which data to include?
 # TODO: which columns/variables to use?
 
-w = spatial_weights_combined(gdf, id_columns[i], k_values[i])
+exec(open(root_path / "src" / "read_analysis_data.py").read())
 
+gdf = hex_travel_times_gdf
+
+id_column = "grid_id"
+k_value = 6
+
+w = spatial_weights_combined(gdf, id_column, k_value)
+# %%
+
+columns = None
+fps_morans = None
+fps_lisa = None
 
 morans_results = compute_spatial_autocorrelation(
-    columns, columns, gdf, spatial_weights[i], fps_morans, show_plot=False
+    columns, columns, gdf, w, fps_morans, show_plot=False
 )
 
 lisa_results = compute_lisa(
     columns,
     columns,
     gdf,
-    spatial_weights[i],
+    w,
     fps_lisa,
     show_plot=False,
 )
