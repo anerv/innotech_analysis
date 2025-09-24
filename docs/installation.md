@@ -11,10 +11,10 @@ conda create -n innotech_analysis geopandas pyyaml pyarrow contextily scikit-lea
 
 
 ````bash
-conda activate innotech
+conda activate innotech_analysis
 pip install matplotlib-scalebar
-pip install --use-pep517 -e .
 pip install generativepy
+pip install --use-pep517 -e .
 ````
 
 
