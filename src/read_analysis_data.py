@@ -76,6 +76,14 @@ hex_travel_times_gdf = hex_travel_times_gdf[
 ]
 
 # %%
+hex_grid_total = duck_db_con.execute(
+    "SELECT *, ST_AsWKB(geometry) as geom_wkb FROM hex_total_travel_times;"
+).fetchdf()
+hex_grid_total["geometry"] = hex_grid_total["geom_wkb"].apply(safe_wkb_load)
+hex_grid_total = hex_grid_total.drop(columns=["geom_wkb"])
+hex_grid_total_gdf = gpd.GeoDataFrame(hex_grid_total, geometry="geometry", crs=crs)
+
+# %%
 if drop_islands:
 
     islands = gpd.read_parquet(islands_fp)
@@ -91,26 +99,17 @@ if drop_islands:
         ~hex_travel_times_gdf["grid_id"].isin(intersection["grid_id"])
     ]
 
+    intersection2 = hex_grid_total_gdf.sjoin(
+        islands, how="inner", predicate="intersects"
+    )
 
-# hex_travel_times_gdf["total_waiting_time"] = hex_travel_times_gdf[
-#     [
-#         col
-#         for col in hex_travel_times_gdf.columns
-#         if col.startswith("wait_time_dest_min")
-#     ]
-# ].sum(axis=1)
+    # drop the rows from hex_grid_total_gdf that DO have a match in islands
+    hex_grid_total_gdf = hex_grid_total_gdf[
+        ~hex_grid_total_gdf["grid_id"].isin(intersection2["grid_id"])
+    ]
 
-# hex_travel_times_gdf["total_travel_time"] = hex_travel_times_gdf[
-#     [col for col in hex_travel_times_gdf.columns if col.startswith("duration_min")]
-# ].sum(axis=1)
 
-# hex_travel_times_gdf["total_time"] = hex_travel_times_gdf[
-#     [
-#         col
-#         for col in hex_travel_times_gdf.columns
-#         if col.startswith("wait_time_dest_min") or col.startswith("duration_min")
-#     ]
-# ].sum(axis=1)
-
-print("Analysis data read successfully, ready as hex_travel_times_gdf")
+print(
+    "Analysis data read successfully, ready as hex_travel_times_gdf and hex_grid_total_gdf"
+)
 # %%
