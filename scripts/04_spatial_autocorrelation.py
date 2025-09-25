@@ -484,26 +484,30 @@ gdf = hex_travel_times_gdf
 id_column = "grid_id"
 k_value = 6
 
+# TODO: DEAL WITH NA VALUES
+
+
 w = spatial_weights_combined(gdf, id_column, k_value)
 # %%
 
-columns = None
-fps_morans = None
-fps_lisa = None
+columns = [c for c in gdf.columns if "duration_min" in c]
+fps_morans = [results_path / "plots" / f"morans_{c}.png" for c in columns]
+fps_lisa = [results_path / "plots" / f"lisa_{c}.png" for c in columns]
 
 morans_results = compute_spatial_autocorrelation(
-    columns, columns, gdf, w, fps_morans, show_plot=False
+    columns, columns, gdf, w, fps_morans, show_plot=True
 )
 
+# %%
 lisa_results = compute_lisa(
     columns,
     columns,
     gdf,
     w,
     fps_lisa,
-    show_plot=False,
+    show_plot=True,
 )
-
+# %%
 # compare_lisa_results(
 #     fp,
 #     metric="network reach",
@@ -513,11 +517,134 @@ lisa_results = compute_lisa(
 # )
 
 plot_significant_lisa_clusters_all(
-    gdf_density,
+    gdf,
     plot_columns=plot_columns,
     titles=titles,
     fp=fp,
     legend_pos=(0.95, 0.95),
 )
 
-df = process_plot_moransi(fp, metric, a, rename_dicts[i])
+# %%
+# TODO TODO
+# df = process_plot_moransi(fp, metric, a, rename_dicts[i])
+
+
+# %%
+
+# def compute_lisa(
+#     col_names, variable_names, gdf, spatial_weights, filepaths, p=0.05, show_plot=True
+# ):
+#     # based on https://geographicdata.science/book/notebooks/07_local_autocorrelation.html
+
+"""
+Wrapper function for computing and plotting local spatial autocorrelation.
+...
+
+Arguments:
+    col_names (list of str): names of cols for which local spatial autocorrelation should be computed
+    variable_names (list of str): name of variables (only to avoid using potentially long or confusing column names for print statements etc.)
+    gdf (geodataframe): geodataframe with polygon data set
+    spatial_weights (pysal spatial weight object): the spatial weight object used in the computation
+    filepaths (list or str): list of filepaths for storing the plots
+    p (float): the desired pseudo p-value
+
+Returns:
+    lisas (dict): dictionary with pysal lisas objects for all columns/variables
+"""
+col_names = columns
+variable_names = columns
+spatial_weights = w
+p = 0.05
+
+lisas = {}
+
+significance_labels = {}
+
+for i, c in enumerate(col_names):
+    v = variable_names[i]
+
+    lisa = esda.moran.Moran_Local(gdf[c], spatial_weights)
+
+    lisas[v] = lisa
+
+    sig = 1 * (lisa.p_sim < p)
+
+    spots = lisa.q * sig
+
+    # Mapping from value to name (as a dict)
+    spots_labels = {
+        0: "Non-Significant",
+        1: "HH",
+        2: "LH",
+        3: "LL",
+        4: "HL",
+    }
+    gdf[f"{v}_q"] = pd.Series(spots, index=gdf.index).map(spots_labels)
+
+    f, axs = plt.subplots(nrows=2, ncols=2, figsize=(15, 15))
+    axs = axs.flatten()
+
+    ax = axs[0]
+
+    gdf.assign(Is=lisa.Is).plot(
+        column="Is",
+        cmap="plasma",
+        scheme="quantiles",
+        k=2,
+        edgecolor="white",
+        linewidth=0.1,
+        alpha=0.75,
+        legend=True,
+        ax=ax,
+    )
+
+    ax = axs[1]
+
+    lisa_cluster(lisa, gdf, p=1, ax=ax)
+
+    ax = axs[2]
+    labels = pd.Series(1 * (lisa.p_sim < p), index=gdf.index).map(
+        {1: "Significant", 0: "Non-Significant"}
+    )
+    gdf.assign(cl=labels).plot(
+        column="cl",
+        categorical=True,
+        k=2,
+        cmap="Paired",
+        linewidth=0.1,
+        edgecolor="white",
+        legend=True,
+        ax=ax,
+    )
+
+    significance_labels[v] = labels
+
+    ax = axs[3]
+    lisa_cluster(lisa, gdf, p=p, ax=ax)
+
+    for z, ax in enumerate(axs.flatten()):
+        ax.set_axis_off()
+        ax.set_title(
+            [
+                "Local Statistics",
+                "Scatterplot Quadrant",
+                "Statistical Significance",
+                "Moran Cluster Map",
+            ][z],
+            y=0,
+        )
+
+    f.suptitle(f"Local Spatial Autocorrelation for differences in: {v}", fontsize=16)
+
+    f.tight_layout()
+
+    # f.savefig(filepaths[i])
+
+    # if show_plot:
+    plt.show()
+
+    plt.close()
+
+    # return lisas
+
+# %%
