@@ -30,9 +30,140 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import silhouette_score
 import warnings
 from matplotlib.patches import Patch
-
+from matplotlib.patches import Rectangle
+from matplotlib.collections import PatchCollection
+from PIL import ImageColor
+from generativepy.color import Color
 
 ############################# RANDOM PLOTTING FUNCTIONS #############################
+
+
+def normalize_data(df, columns):
+    for c in columns:
+        df[c + "_norm"] = (df[c] - df[c].min()) / (df[c].max() - df[c].min())
+    return df
+
+
+### function to convert hex color to rgb to Color object (generativepy package)
+def hex_to_color(hexcode):
+    rgb = ImageColor.getcolor(hexcode, "RGB")
+    rgb = [v / 256 for v in rgb]
+    rgb = Color(*rgb)
+    return rgb
+
+
+def create_color_grid(class_bounds, c00, c10, c01, c11):
+    group_count = len(class_bounds)
+    c00_to_c10 = []
+    c01_to_c11 = []
+    colorlist = []
+    for i in range(group_count):
+        c00_to_c10.append(c00.lerp(c10, 1 / (group_count - 1) * i))
+        c01_to_c11.append(c01.lerp(c11, 1 / (group_count - 1) * i))
+    for i in range(group_count):
+        for j in range(group_count):
+            colorlist.append(
+                c00_to_c10[i].lerp(c01_to_c11[i], 1 / (group_count - 1) * j)
+            )
+    return colorlist
+
+
+### function to get bivariate color given two percentiles
+def get_bivariate_choropleth_color(p1, p2, class_bounds, colorlist):
+    if p1 >= 0 and p2 >= 0:
+        count = 0
+        stop = False
+        for percentile_bound_p1 in class_bounds:
+            for percentile_bound_p2 in class_bounds:
+                if (not stop) and (p1 <= percentile_bound_p1):
+                    if (not stop) and (p2 <= percentile_bound_p2):
+                        color = colorlist[count]
+                        stop = True
+                count += 1
+    else:
+        color = [0.8, 0.8, 0.8, 1]
+    return color
+
+
+def make_bivariate_choropleth_map(
+    gdf,
+    col1,
+    col2,
+    # attr,
+    col1_label,
+    col2_label,
+    class_bounds,
+    colorlist,
+    figsize=(15, 10),
+    alpha=0.8,
+    fp=None,
+    fs_labels=12,
+    fs_tick=10,
+):
+
+    ### plot map based on bivariate choropleth
+    _, ax = plt.subplots(1, 1, figsize=figsize)
+
+    gdf["color_bivariate"] = [
+        get_bivariate_choropleth_color(p1, p2, class_bounds, colorlist)
+        for p1, p2 in zip(gdf[col1].values, gdf[col2].values)
+    ]
+
+    gdf.plot(
+        ax=ax, color=gdf["color_bivariate"], alpha=alpha, legend=False, linewidth=0.0
+    )
+
+    ax.set_axis_off()
+
+    ax.add_artist(
+        ScaleBar(
+            dx=1,
+            units="m",
+            dimension="si-length",
+            length_fraction=0.15,
+            width_fraction=0.002,
+            location="lower left",
+            box_alpha=0.5,
+            font_properties={"size": fs_labels},
+        )
+    )
+
+    ### now create inset legend
+    legend_ax = ax.inset_axes([0.6, 0.6, 0.35, 0.35])
+    legend_ax.set_aspect("equal", adjustable="box")
+    count = 0
+    xticks = [0]
+    yticks = [0]
+    for i, percentile_bound_p1 in enumerate(class_bounds):
+        for j, percentile_bound_p2 in enumerate(class_bounds):
+            percentileboxes = [Rectangle((i, j), 1, 1)]
+            pc = PatchCollection(
+                percentileboxes, facecolor=colorlist[count], alpha=alpha
+            )
+            count += 1
+            legend_ax.add_collection(pc)
+            if i == 0:
+                yticks.append(percentile_bound_p2)
+        xticks.append(percentile_bound_p1)
+
+    _ = legend_ax.set_xlim([0, len(class_bounds)])
+    _ = legend_ax.set_ylim([0, len(class_bounds)])
+    _ = legend_ax.set_xticks(
+        list(range(len(class_bounds) + 1)), xticks, fontsize=fs_tick
+    )
+    _ = legend_ax.set_yticks(
+        list(range(len(class_bounds) + 1)), yticks, fontsize=fs_tick
+    )
+    _ = legend_ax.set_xlabel(col1_label, fontsize=fs_labels)
+    _ = legend_ax.set_ylabel(col2_label, fontsize=fs_labels)
+
+    plt.tight_layout()
+
+    if fp:
+        plt.savefig(fp, dpi=300)
+
+    plt.show()
+    plt.close()
 
 
 def map_results_user_defined(
@@ -1331,132 +1462,132 @@ def highlight_min_traveltime(s):
     return ["color: blue" if v else "" for v in is_min]
 
 
-# def plot_no_connection(
-#     gdf, study_area, attribution_text, font_size, title, fp=None, crs="EPSG:25832"
-# ):
+def plot_no_connection(
+    gdf, study_area, attribution_text, font_size, title, fp=None, crs="EPSG:25832"
+):
 
-#     assert study_area.crs == gdf.crs, "CRS mismatch between study area and GeoDataFrame"
+    assert study_area.crs == gdf.crs, "CRS mismatch between study area and GeoDataFrame"
 
-#     _, ax = plt.subplots(figsize=(10, 10))
+    _, ax = plt.subplots(figsize=(10, 10))
 
-#     study_area.plot(
-#         ax=ax,
-#         color="none",
-#         edgecolor="black",
-#         alpha=0.5,
-#     )
+    study_area.plot(
+        ax=ax,
+        color="none",
+        edgecolor="black",
+        alpha=0.5,
+    )
 
-#     gdf.plot(
-#         ax=ax,
-#         legend=True,
-#         markersize=5,
-#         color="orange",
-#         edgecolor="orange",
-#         alpha=0.5,
-#         legend_kwds={"label": "No connection"},
-#     )
+    gdf.plot(
+        ax=ax,
+        legend=True,
+        markersize=5,
+        color="orange",
+        edgecolor="orange",
+        alpha=0.5,
+        legend_kwds={"label": "No connection"},
+    )
 
-#     ax.set_title(title, fontsize=font_size + 2, fontdict={"weight": "bold"})
+    ax.set_title(title, fontsize=font_size + 2, fontdict={"weight": "bold"})
 
-#     ax.set_axis_off()
+    ax.set_axis_off()
 
-#     ax.add_artist(
-#         ScaleBar(
-#             dx=1,
-#             units="m",
-#             dimension="si-length",
-#             length_fraction=0.15,
-#             width_fraction=0.002,
-#             location="lower left",
-#             box_alpha=0,
-#             font_properties={"size": font_size},
-#         )
-#     )
-#     cx.add_attribution(ax=ax, text=attribution_text, font_size=font_size)
-#     txt = ax.texts[-1]
-#     txt.set_position([0.99, 0.01])
-#     txt.set_ha("right")
-#     txt.set_va("bottom")
+    ax.add_artist(
+        ScaleBar(
+            dx=1,
+            units="m",
+            dimension="si-length",
+            length_fraction=0.15,
+            width_fraction=0.002,
+            location="lower left",
+            box_alpha=0,
+            font_properties={"size": font_size},
+        )
+    )
+    cx.add_attribution(ax=ax, text=attribution_text, font_size=font_size)
+    txt = ax.texts[-1]
+    txt.set_position([0.99, 0.01])
+    txt.set_ha("right")
+    txt.set_va("bottom")
 
-#     plt.tight_layout()
+    plt.tight_layout()
 
-#     if fp:
+    if fp:
 
-#         plt.savefig(
-#             fp,
-#             dpi=300,
-#             bbox_inches="tight",
-#         )
+        plt.savefig(
+            fp,
+            dpi=300,
+            bbox_inches="tight",
+        )
 
-#     plt.show()
-#     plt.close()
+    plt.show()
+    plt.close()
 
 
-# def plot_traveltime_results(
-#     gdf,
-#     plot_col,
-#     attribution_text,
-#     font_size,
-#     title,
-#     fp=None,
-# ):
-#     """
-#     Plot the results on a map.
-#     """
+def plot_traveltime_results(
+    gdf,
+    plot_col,
+    attribution_text,
+    font_size,
+    title,
+    fp=None,
+):
+    """
+    Plot the results on a map.
+    """
 
-#     _, ax = plt.subplots(figsize=(10, 10))
+    _, ax = plt.subplots(figsize=(10, 10))
 
-#     divider = make_axes_locatable(ax)
+    divider = make_axes_locatable(ax)
 
-#     cax = divider.append_axes("right", size="3.5%", pad="1%")
-#     cax.tick_params(labelsize=font_size)
+    cax = divider.append_axes("right", size="3.5%", pad="1%")
+    cax.tick_params(labelsize=font_size)
 
-#     gdf.plot(
-#         ax=ax,
-#         cax=cax,
-#         column=plot_col,
-#         cmap="viridis",
-#         legend=True,
-#         markersize=5,
-#     )
+    gdf.plot(
+        ax=ax,
+        cax=cax,
+        column=plot_col,
+        cmap="viridis",
+        legend=True,
+        markersize=5,
+    )
 
-#     for spine in cax.spines.values():
-#         spine.set_visible(False)
+    for spine in cax.spines.values():
+        spine.set_visible(False)
 
-#     ax.set_title(title, fontsize=font_size + 2, fontdict={"weight": "bold"})
+    ax.set_title(title, fontsize=font_size + 2, fontdict={"weight": "bold"})
 
-#     ax.set_axis_off()
+    ax.set_axis_off()
 
-#     ax.add_artist(
-#         ScaleBar(
-#             dx=1,
-#             units="m",
-#             dimension="si-length",
-#             length_fraction=0.15,
-#             width_fraction=0.002,
-#             location="lower left",
-#             box_alpha=0,
-#             font_properties={"size": font_size},
-#         )
-#     )
-#     cx.add_attribution(ax=ax, text=attribution_text, font_size=font_size)
-#     txt = ax.texts[-1]
-#     txt.set_position([0.99, 0.01])
-#     txt.set_ha("right")
-#     txt.set_va("bottom")
+    ax.add_artist(
+        ScaleBar(
+            dx=1,
+            units="m",
+            dimension="si-length",
+            length_fraction=0.15,
+            width_fraction=0.002,
+            location="lower left",
+            box_alpha=0,
+            font_properties={"size": font_size},
+        )
+    )
+    cx.add_attribution(ax=ax, text=attribution_text, font_size=font_size)
+    txt = ax.texts[-1]
+    txt.set_position([0.99, 0.01])
+    txt.set_ha("right")
+    txt.set_va("bottom")
 
-#     plt.tight_layout()
+    plt.tight_layout()
 
-#     if fp:
+    if fp:
 
-#         plt.savefig(
-#             fp,
-#             dpi=300,
-#             bbox_inches="tight",
-#         )
+        plt.savefig(
+            fp,
+            dpi=300,
+            bbox_inches="tight",
+        )
 
-#     plt.show()
-#     plt.close()
+    plt.show()
+    plt.close()
 
 
 # # Define the styling function for NaN values

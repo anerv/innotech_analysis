@@ -336,7 +336,7 @@ for i, w in enumerate(weight_cols):
 
 
 # %%
-# aggregate to hex grid
+# aggregate weighted travel times to hex grid
 for w in weight_cols:
 
     query = f"""CREATE OR REPLACE TABLE hex_weighted_{w} AS (SELECT 
@@ -351,55 +351,6 @@ for w in weight_cols:
         GROUP BY h.grid_id, hg.geometry);
         """
     duck_db_con.execute(query)
-
-# plot maps of weighted travel times on hex grid
-fontsize = 12
-for w in weight_cols:
-    weighted_hex = load_gdf_from_duckdb(duck_db_con, f"hex_weighted_{w}", crs)
-
-    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-
-    divider = make_axes_locatable(ax)
-
-    cax = divider.append_axes("right", size="3.5%", pad="1%")
-    cax.tick_params(labelsize=fontsize)
-
-    weighted_hex.plot(
-        column="avg_total_weighted_time",
-        legend=True,
-        cmap="viridis",
-        ax=ax,
-        cax=cax,
-    )
-
-    for spine in cax.spines.values():
-        spine.set_visible(False)
-
-    ax.set_axis_off()
-
-    ax.add_artist(
-        ScaleBar(
-            dx=1,
-            units="m",
-            dimension="si-length",
-            length_fraction=0.15,
-            width_fraction=0.002,
-            location="lower left",
-            box_alpha=0,
-            font_properties={"size": fontsize},
-        )
-    )
-
-    ax.set_title(
-        f"Average Weighted {labels[weight_cols.index(w)]}", fontsize=fontsize + 2
-    )
-    plt.tight_layout()
-    plt.savefig(
-        results_path
-        / f"maps/hex_weighted_map_{labels[weight_cols.index(w)].replace(' ', '_')}.png",
-        dpi=300,
-        bbox_inches="tight",
-    )
 
 # %%
 # compute and plot total travel times
@@ -487,9 +438,8 @@ map_results_user_defined(
 # to duckdb
 export_gdf_to_duckdb_spatial(total_travel_times_gdf, duck_db_con, "total_travel_times")
 
-# TODO: AGGREGATE TO HEX GRID
-# PLOT MAPS
 # %%
+# aggregate total travel times to hex grid
 query = f"""CREATE OR REPLACE TABLE hex_total_travel_times AS (SELECT 
             h.grid_id,
             hg.geometry,
@@ -504,56 +454,5 @@ query = f"""CREATE OR REPLACE TABLE hex_total_travel_times AS (SELECT
         GROUP BY h.grid_id, hg.geometry);
         """
 duck_db_con.execute(query)
-
-# %%
-# plot maps of weighted travel times on hex grid
-fontsize = 12
-
-hex_tt = load_gdf_from_duckdb(duck_db_con, f"hex_total_travel_times", crs)
-
-columns = ["avg_total_duration", "avg_total_wait_time", "avg_total_time"]
-
-for c in columns:
-
-    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-
-    divider = make_axes_locatable(ax)
-
-    cax = divider.append_axes("right", size="3.5%", pad="1%")
-    cax.tick_params(labelsize=fontsize)
-
-    hex_tt.plot(
-        column=c,
-        legend=True,
-        cmap="viridis",
-        ax=ax,
-        cax=cax,
-    )
-
-    for spine in cax.spines.values():
-        spine.set_visible(False)
-
-    ax.set_axis_off()
-
-    ax.add_artist(
-        ScaleBar(
-            dx=1,
-            units="m",
-            dimension="si-length",
-            length_fraction=0.15,
-            width_fraction=0.002,
-            location="lower left",
-            box_alpha=0,
-            font_properties={"size": fontsize},
-        )
-    )
-
-    ax.set_title(f"{c.replace("_"," ").title()} (min.)", fontsize=fontsize + 2)
-    plt.tight_layout()
-    plt.savefig(
-        results_path / f"maps/hex_map_{c}.png",
-        dpi=300,
-        bbox_inches="tight",
-    )
 
 # %%

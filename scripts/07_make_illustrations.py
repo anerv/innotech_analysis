@@ -8,15 +8,238 @@ import geopandas as gpd
 from matplotlib_scalebar.scalebar import ScaleBar
 import math
 import itertools
+import duckdb
 from matplotlib.colors import rgb2hex
-from matplotlib.patches import Rectangle
-from matplotlib.collections import PatchCollection
-from PIL import ImageColor
-from generativepy.color import Color
-
+from src.helper_functions import (
+    plot_traveltime_results,
+    plot_no_connection,
+    plot_histogram,
+    map_results_user_defined,
+    load_gdf_from_duckdb,
+    export_gdf_to_duckdb_spatial,
+    normalize_data,
+    make_bivariate_choropleth_map,
+    hex_to_color,
+    create_color_grid,
+)
+import yaml
+import sys
+import os
+from pathlib import Path
 
 # %%
 
+# Define the path to the config.yml file
+script_path = Path(__file__).resolve()
+root_path = script_path.parent.parent
+data_path = root_path / "data"
+results_path = root_path / "results"
+config_path = root_path / "config_model.yml"
+config_analysis_path = root_path / "config_analysis.yml"
+
+with open(config_analysis_path, "r") as file:
+    config_analysis = yaml.safe_load(file)
+
+    crs = config_analysis["crs"]
+    drop_islands = config_analysis.get("drop_islands", False)
+
+    islands_fp = config_analysis.get("islands_fp", None)
+
+# Read and parse the YAML file
+with open(config_path, "r") as file:
+    config_model = yaml.safe_load(file)
+
+    crs = config_model["crs"]
+
+otp_db_fp = root_path / "data" / "otp_results.db"
+duck_db_con = duckdb.connect(otp_db_fp)
+
+duck_db_con.execute("INSTALL spatial;")
+duck_db_con.execute("LOAD spatial;")
+# %%
+
+# load study area for plotting
+
+study_area = gpd.read_file(config_analysis["study_area_fp"])
+
+services = config_model["services"]
+
+for service in services:
+
+    for i in range(1, int(service["n_neighbors"]) + 1):
+        dataset = f"{service['service_type']}_{i}"
+
+        gdf = gpd.read_parquet(data_path / f"input/{dataset}_addresses_otp_geo.parquet")
+
+        # TODO: DROP ISL
+        # Process each dataset
+
+        plot_columns = [
+            "duration_min",
+            "wait_time_dest_min",
+            "total_time_min",
+        ]
+
+        labels = ["Travel time (min)", "Wait time (min)", "Total duration (min)"]
+
+        attribution_text = "KDS, OpenStreetMap"
+        font_size = 10
+
+        for i, plot_col in enumerate(plot_columns):
+            fp = results_path / f"maps/{dataset}_{plot_col}.png"
+
+            title = f"{labels[i]} to {dataset.split("_")[-1]} nearest {dataset.split("_")[0]} by public transport"
+
+            plot_traveltime_results(
+                gdf,
+                plot_col,
+                attribution_text,
+                font_size,
+                title,
+                fp,
+            )
+
+        no_results = gdf[(gdf["duration"].isna()) & (gdf.abs_dist > 0)].copy()
+        if not no_results.empty:
+            fp_no_results = results_path / f"maps/{dataset}_no_results.png"
+            title_no_results = f"Locations with no results for {dataset.split('_')[-1]} nearest {dataset.split('_')[0]} by public transport"
+
+            plot_no_connection(
+                no_results,
+                study_area,
+                attribution_text,
+                font_size,
+                title_no_results,
+                fp_no_results,
+            )
+
+
+# %%
+# plot maps of total travel times on hex grid
+fontsize = 12
+
+hex_tt = load_gdf_from_duckdb(duck_db_con, f"hex_total_travel_times", crs)
+
+if drop_islands:
+    islands = gpd.read_parquet(islands_fp)
+
+    assert islands.crs == crs, "CRS of islands does not match the analysis CRS"
+
+    intersection = hex_tt.sjoin(islands, how="inner", predicate="intersects")
+
+    # drop the rows from hex_travel_times_gdf that DO have a match in islands
+    hex_tt = hex_tt[~hex_tt["grid_id"].isin(intersection["grid_id"])]
+
+columns = ["avg_total_duration", "avg_total_wait_time", "avg_total_time"]
+
+for c in columns:
+
+    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+
+    divider = make_axes_locatable(ax)
+
+    cax = divider.append_axes("right", size="3.5%", pad="1%")
+    cax.tick_params(labelsize=fontsize)
+
+    hex_tt.plot(
+        column=c,
+        legend=True,
+        cmap="viridis",
+        ax=ax,
+        cax=cax,
+    )
+
+    for spine in cax.spines.values():
+        spine.set_visible(False)
+
+    ax.set_axis_off()
+
+    ax.add_artist(
+        ScaleBar(
+            dx=1,
+            units="m",
+            dimension="si-length",
+            length_fraction=0.15,
+            width_fraction=0.002,
+            location="lower left",
+            box_alpha=0,
+            font_properties={"size": fontsize},
+        )
+    )
+
+    ax.set_title(f"{c.replace("_"," ").title()} (min.)", fontsize=fontsize + 2)
+    plt.tight_layout()
+    plt.savefig(
+        results_path / f"maps/hex_map_{c}.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+# %%
+# plot weighted travel times based on service importance for hex grid
+
+weight_cols = ["duration_min", "total_time_min"]
+labels = ["Travel Time", "Total Time (incl. wait time)"]
+fontsize = 12
+
+for w in weight_cols:
+    hex_w = load_gdf_from_duckdb(duck_db_con, f"hex_weighted_{w}", crs)
+
+    if drop_islands:
+        islands = gpd.read_parquet(islands_fp)
+
+        assert islands.crs == crs, "CRS of islands does not match the analysis CRS"
+
+        intersection = hex_w.sjoin(islands, how="inner", predicate="intersects")
+
+        # drop the rows from hex_travel_times_gdf that DO have a match in islands
+        hex_w = hex_w[~hex_w["grid_id"].isin(intersection["grid_id"])]
+
+    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+
+    divider = make_axes_locatable(ax)
+
+    cax = divider.append_axes("right", size="3.5%", pad="1%")
+    cax.tick_params(labelsize=fontsize)
+
+    hex_w.plot(
+        column="avg_total_weighted_time",
+        legend=True,
+        cmap="viridis",
+        ax=ax,
+        cax=cax,
+    )
+
+    for spine in cax.spines.values():
+        spine.set_visible(False)
+
+    ax.set_axis_off()
+
+    ax.add_artist(
+        ScaleBar(
+            dx=1,
+            units="m",
+            dimension="si-length",
+            length_fraction=0.15,
+            width_fraction=0.002,
+            location="lower left",
+            box_alpha=0,
+            font_properties={"size": fontsize},
+        )
+    )
+
+    ax.set_title(
+        f"Average Weighted {labels[weight_cols.index(w)]}", fontsize=fontsize + 2
+    )
+    plt.tight_layout()
+    plt.savefig(
+        results_path
+        / f"maps/hex_weighted_map_{labels[weight_cols.index(w)].replace(' ', '_')}.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+# %%
 # population density map
 
 # Population
@@ -223,134 +446,6 @@ for label, plot_columns in zip(["income", "cars"], [socio_income_vars, socio_car
     fig.savefig(filepath, bbox_inches="tight", dpi=dpi)
 
 # %%
-
-
-def normalize_data(df, columns):
-    for c in columns:
-        df[c + "_norm"] = (df[c] - df[c].min()) / (df[c].max() - df[c].min())
-    return df
-
-
-### function to convert hex color to rgb to Color object (generativepy package)
-def hex_to_color(hexcode):
-    rgb = ImageColor.getcolor(hexcode, "RGB")
-    rgb = [v / 256 for v in rgb]
-    rgb = Color(*rgb)
-    return rgb
-
-
-def create_color_grid(class_bounds, c00, c10, c01, c11):
-    group_count = len(class_bounds)
-    c00_to_c10 = []
-    c01_to_c11 = []
-    colorlist = []
-    for i in range(group_count):
-        c00_to_c10.append(c00.lerp(c10, 1 / (group_count - 1) * i))
-        c01_to_c11.append(c01.lerp(c11, 1 / (group_count - 1) * i))
-    for i in range(group_count):
-        for j in range(group_count):
-            colorlist.append(
-                c00_to_c10[i].lerp(c01_to_c11[i], 1 / (group_count - 1) * j)
-            )
-    return colorlist
-
-
-### function to get bivariate color given two percentiles
-def get_bivariate_choropleth_color(p1, p2, class_bounds, colorlist):
-    if p1 >= 0 and p2 >= 0:
-        count = 0
-        stop = False
-        for percentile_bound_p1 in class_bounds:
-            for percentile_bound_p2 in class_bounds:
-                if (not stop) and (p1 <= percentile_bound_p1):
-                    if (not stop) and (p2 <= percentile_bound_p2):
-                        color = colorlist[count]
-                        stop = True
-                count += 1
-    else:
-        color = [0.8, 0.8, 0.8, 1]
-    return color
-
-
-def make_bivariate_choropleth_map(
-    gdf,
-    col1,
-    col2,
-    # attr,
-    col1_label,
-    col2_label,
-    class_bounds,
-    colorlist,
-    figsize=(15, 10),
-    alpha=0.8,
-    fp=None,
-    fs_labels=12,
-    fs_tick=10,
-):
-
-    ### plot map based on bivariate choropleth
-    _, ax = plt.subplots(1, 1, figsize=figsize)
-
-    gdf["color_bivariate"] = [
-        get_bivariate_choropleth_color(p1, p2, class_bounds, colorlist)
-        for p1, p2 in zip(gdf[col1].values, gdf[col2].values)
-    ]
-
-    gdf.plot(
-        ax=ax, color=gdf["color_bivariate"], alpha=alpha, legend=False, linewidth=0.0
-    )
-
-    ax.set_axis_off()
-
-    ax.add_artist(
-        ScaleBar(
-            dx=1,
-            units="m",
-            dimension="si-length",
-            length_fraction=0.15,
-            width_fraction=0.002,
-            location="lower left",
-            box_alpha=0.5,
-            font_properties={"size": fs_labels},
-        )
-    )
-
-    ### now create inset legend
-    legend_ax = ax.inset_axes([0.6, 0.6, 0.35, 0.35])
-    legend_ax.set_aspect("equal", adjustable="box")
-    count = 0
-    xticks = [0]
-    yticks = [0]
-    for i, percentile_bound_p1 in enumerate(class_bounds):
-        for j, percentile_bound_p2 in enumerate(class_bounds):
-            percentileboxes = [Rectangle((i, j), 1, 1)]
-            pc = PatchCollection(
-                percentileboxes, facecolor=colorlist[count], alpha=alpha
-            )
-            count += 1
-            legend_ax.add_collection(pc)
-            if i == 0:
-                yticks.append(percentile_bound_p2)
-        xticks.append(percentile_bound_p1)
-
-    _ = legend_ax.set_xlim([0, len(class_bounds)])
-    _ = legend_ax.set_ylim([0, len(class_bounds)])
-    _ = legend_ax.set_xticks(
-        list(range(len(class_bounds) + 1)), xticks, fontsize=fs_tick
-    )
-    _ = legend_ax.set_yticks(
-        list(range(len(class_bounds) + 1)), yticks, fontsize=fs_tick
-    )
-    _ = legend_ax.set_xlabel(col1_label, fontsize=fs_labels)
-    _ = legend_ax.set_ylabel(col2_label, fontsize=fs_labels)
-
-    plt.tight_layout()
-
-    if fp:
-        plt.savefig(fp, dpi=300)
-
-    plt.show()
-    plt.close()
 
 
 analysis_vars = [
