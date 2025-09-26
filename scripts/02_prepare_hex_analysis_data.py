@@ -123,9 +123,9 @@ WITH
 {",\n".join(ctes)}
 SELECT
     {", ".join(select_cols)}
-FROM geom
-{" ".join([f"LEFT JOIN {table}_agg USING ({geom_id_col})" for table in table_names])}
-LEFT JOIN obs_count USING ({geom_id_col});
+FROM obs_count
+{" ".join([f"JOIN {table}_agg USING ({geom_id_col})" for table in table_names])}
+JOIN geom USING ({geom_id_col});
 """
 duck_db_con.execute(query)
 
@@ -200,9 +200,9 @@ WITH
 {",\n".join(ctes)}
 SELECT
     {", ".join(select_cols)}
-FROM geom
-{" ".join([f"LEFT JOIN {table}_agg USING ({geom_id_col})" for table in table_names])}
-LEFT JOIN obs_count USING ({geom_id_col});
+FROM obs_count
+{" ".join([f"JOIN {table}_agg USING ({geom_id_col})" for table in table_names])}
+JOIN geom USING ({geom_id_col});
 """
 duck_db_con.execute(query)
 
