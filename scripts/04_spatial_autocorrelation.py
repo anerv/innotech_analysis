@@ -10,6 +10,7 @@ from src.helper_functions import (
     spatial_weights_combined,
     compute_spatial_autocorrelation,
     compute_lisa,
+    safe_wkb_load,
 )
 from matplotlib.colors import ListedColormap
 import duckdb
@@ -49,7 +50,6 @@ services = config_model["services"]
 
 # %% which columns/variables to use?
 
-# TODO: which data to include?
 
 exec(open(root_path / "src" / "read_analysis_data.py").read())
 
@@ -59,6 +59,76 @@ id_column = "grid_id"
 k_value = 6
 
 columns = [c for c in gdf.columns if "duration_min" in c]
+fps_morans = [results_path / "plots" / f"morans_{c}.png" for c in columns]
+fps_lisa = [results_path / "maps" / f"lisa_{c}.png" for c in columns]
+
+gdf.dropna(subset=columns, inplace=True)
+
+w = spatial_weights_combined(gdf, id_column, k_value)
+
+
+morans_results = compute_spatial_autocorrelation(
+    columns, columns, gdf, w, fps_morans, show_plot=True
+)
+
+lisa_results = compute_lisa(
+    columns,
+    columns,
+    gdf,
+    w,
+    fps_lisa,
+    show_plot=True,
+)
+# %%
+# total travel times
+gdf = hex_grid_total_gdf
+
+id_column = "grid_id"
+k_value = 6
+
+columns = [c for c in gdf.columns if "total" in c]
+fps_morans = [results_path / "plots" / f"morans_{c}.png" for c in columns]
+fps_lisa = [results_path / "maps" / f"lisa_{c}.png" for c in columns]
+
+gdf.dropna(subset=columns, inplace=True)
+
+w = spatial_weights_combined(gdf, id_column, k_value)
+
+
+morans_results = compute_spatial_autocorrelation(
+    columns, columns, gdf, w, fps_morans, show_plot=True
+)
+
+lisa_results = compute_lisa(
+    columns,
+    columns,
+    gdf,
+    w,
+    fps_lisa,
+    show_plot=True,
+)
+
+# %%
+# weighted travel times
+
+df = duck_db_con.execute(
+    """SELECT d.grid_id, 
+    d.avg_total_weighted_time AS weighted_duration, 
+    t.avg_total_weighted_time AS weighted_total_time,
+    ST_AsWKB(d.geometry) AS geom_wkb FROM hex_weighted_duration_min d 
+    JOIN hex_weighted_total_time_min t ON d.grid_id = t.grid_id;"""
+).fetchdf()
+
+# %%
+df["geometry"] = df["geom_wkb"].apply(safe_wkb_load)
+df = df.drop(columns=["geom_wkb"])
+gdf = gpd.GeoDataFrame(df, geometry="geometry", crs=crs)
+
+# %%
+id_column = "grid_id"
+k_value = 6
+
+columns = [c for c in gdf.columns if "weighted" in c]
 fps_morans = [results_path / "plots" / f"morans_{c}.png" for c in columns]
 fps_lisa = [results_path / "maps" / f"lisa_{c}.png" for c in columns]
 

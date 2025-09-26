@@ -243,7 +243,7 @@ for w in weight_cols:
 # population density map
 
 # Population
-figsize_map = (15, 19)
+figsize_map = (15, 10)
 dpi = 300
 fontsize_legend = 12
 
@@ -255,10 +255,10 @@ fig, ax = plt.subplots(figsize=figsize_map)
 
 pop_gdf.plot(
     ax=ax,
-    scheme="quantiles",  # "natural_breaks",
-    k=7,
+    scheme="quantiles",  # "quantiles",  # "natural_breaks",
+    k=5,
     column="population_density",
-    cmap="cividis",
+    cmap="viridis",
     linewidth=0.0,
     edgecolor="none",
     legend=True,
@@ -316,6 +316,7 @@ txt.set_position([0.99, 0.01])
 txt.set_ha("right")
 txt.set_va("bottom")
 
+plt.tight_layout()
 
 fig.savefig(filepath + ".png", dpi=dpi)
 
@@ -508,5 +509,82 @@ for v in variable_combos:
         fs_labels=14,
         fs_tick=12,
     )
+
+# %%
+
+
+figsize_map = (15, 10)
+dpi = 300
+fontsize_legend = 12
+
+filepath = "../illustrations/socio_income_50th_percentile_new"
+
+fig, ax = plt.subplots(figsize=figsize_map)
+
+pop_gdf.plot(
+    ax=ax,
+    scheme="quantiles",  # "quantiles",  # "natural_breaks",
+    k=7,
+    column="households_income_50_percentile",
+    cmap="viridis",
+    linewidth=0.0,
+    edgecolor="none",
+    legend=True,
+    legend_kwds={
+        "fmt": "{:,.0f}",
+        "frameon": False,
+        "fontsize": fontsize_legend,
+    },
+)
+
+# # Access the legend
+# legend = ax.get_legend()
+
+# new_labels = []
+# for text in legend.get_texts():
+#     label = text.get_text()  # Extract the label text
+
+#     label_split = label.split(",")
+
+#     first_val = label_split[0]
+#     second_val = label_split[1].strip(" ")
+
+#     new_labels.append(
+#         f"{int(round(float(first_val), -1))}"
+#         + ", "
+#         + f"{int(round(float(second_val), -1))}"
+#     )
+
+# Update the legend text
+for text, new_label in zip(legend.get_texts(), new_labels):
+    text.set_text(new_label)
+
+ax.set_axis_off()
+
+ax.add_artist(
+    ScaleBar(
+        dx=1,
+        units="m",
+        dimension="si-length",
+        length_fraction=0.15,
+        width_fraction=0.002,
+        location="lower left",
+        box_alpha=0,
+        font_properties={"size": fontsize_legend},
+    )
+)
+cx.add_attribution(
+    ax=ax,
+    text="(C) " + "Statistics Denmark",
+    font_size=fontsize_legend,
+)
+txt = ax.texts[-1]
+txt.set_position([0.99, 0.01])
+txt.set_ha("right")
+txt.set_va("bottom")
+
+plt.tight_layout()
+
+fig.savefig(filepath + ".png", dpi=dpi)
 
 # %%
